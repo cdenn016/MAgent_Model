@@ -183,33 +183,27 @@ class ManifoldAgentSystem(nn.Module):
     def volume_weighted_free_energy(self,
                                      observations: Optional[Tensor] = None,
                                      obs_precision: Optional[Tensor] = None,
-                                     model_priors: Optional[Dict] = None,
                                      ancestors: Optional[List] = None,
                                      ) -> Dict[str, Tensor]:
-        """Compute the COMPLETE variational free energy (Eq. 24).
+        """Compute the variational free energy (Eq. 24).
 
-        All 8 terms from the manuscript:
-          T1: belief self-consistency KL(q_i || p_i)
-          T2: model self-consistency KL(p_i || r_i)
-          T3: belief alignment β_ij KL(q_i || Ω_ij[q_j])
-          T4: model alignment γ_ij KL(p_i || Ω̃_ij[p_j])
-          T5: observation likelihood
-          T6: hyperprior terms from Ouroboros tower
-          R1: gauge field smoothness
-          R2: Yang-Mills curvature penalty
+        Core 5 terms:
+          T1: KL(q_i || p_i)              — belief self-consistency
+          T2: KL(s_i || r_i)              — model self-consistency
+          T3: β_ij KL(q_i || Ω_ij[q_j])  — belief alignment
+          T4: γ_ij KL(s_i || Ω̃_ij[s_j])  — model alignment
+          T5: -E_q[log p(o|q)]            — observation
 
-        All with proper √|g| volume weighting and full lattice gauge transport.
-
-        Returns:
-            Dict with total, all 8 components, attention weights
+        Plus optional extensions (if λ > 0): hyperpriors, gauge smoothness, YM.
+        All with proper √|g| volume weighting and lattice gauge transport.
         """
         result = self.vfe(
             self.system,
             observations=observations,
             obs_precision=obs_precision,
-            model_priors=model_priors,
             ancestors=ancestors,
             transport_fn=self.full_transport,
+            model_transport_fn=None,  # uses vertex-local Ω̃_i Ω̃_j⁻¹
             lattice_gauge=self.gauge_field,
             vol=self.vol_form,
         )
@@ -248,7 +242,6 @@ class ManifoldAgentSystem(nn.Module):
     def evolve(self, n_steps: int, lr: float = 0.01,
                observations: Optional[Tensor] = None,
                obs_precision: Optional[Tensor] = None,
-               model_priors: Optional[Dict] = None,
                ancestors: Optional[List] = None,
                verbose: bool = True) -> List[Dict]:
         """Evolve the full manifold-aware system.
@@ -261,7 +254,7 @@ class ManifoldAgentSystem(nn.Module):
         for t in range(n_steps):
             optimizer.zero_grad()
             result = self.volume_weighted_free_energy(
-                observations, obs_precision, model_priors, ancestors
+                observations, obs_precision, ancestors
             )
             result['total'].backward()
             torch.nn.utils.clip_grad_norm_(self.parameters(), 5.0)
