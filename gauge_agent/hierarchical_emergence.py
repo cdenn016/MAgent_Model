@@ -55,24 +55,25 @@ def _pairwise_kl_cross(system_a: MultiAgentSystem,
                        fiber: str = 'model') -> Tensor:
     """KL divergences between two systems on the specified fiber.
 
+    POINTWISE over the base manifold: returns a field, not a scalar.
+
     Args:
         system_a: N-agent system (rows)
         system_b: M-agent system (columns)
         fiber: 'model' (s_i with Ω̃) or 'belief' (q_i with Ω)
     Returns:
-        (N, M) matrix of KL divergences
+        (N, M, *grid_shape) KL divergence field
     """
     N = system_a.N_agents
     M = system_b.N_agents
-    K = system_a.K
 
     if fiber == 'model':
-        mu_a = system_a.get_all_mu_s()
-        sigma_a = system_a.get_all_sigma_s()
-        omega_a = system_a.get_all_omega_model()
-        mu_b = system_b.get_all_mu_s()
-        sigma_b = system_b.get_all_sigma_s()
-        omega_b = system_b.get_all_omega_model()
+        mu_a = system_a.get_all_mu_s()           # (N, *grid, K)
+        sigma_a = system_a.get_all_sigma_s()      # (N, *grid, K, K)
+        omega_a = system_a.get_all_omega_model()  # (N, *grid, K, K)
+        mu_b = system_b.get_all_mu_s()            # (M, *grid, K)
+        sigma_b = system_b.get_all_sigma_s()      # (M, *grid, K, K)
+        omega_b = system_b.get_all_omega_model()  # (M, *grid, K, K)
     else:
         mu_a = system_a.get_all_mu_q()
         sigma_a = system_a.get_all_sigma_q()
@@ -81,17 +82,41 @@ def _pairwise_kl_cross(system_a: MultiAgentSystem,
         sigma_b = system_b.get_all_sigma_q()
         omega_b = system_b.get_all_omega()
 
+    # Transport: Ω_{iα} = Ω_a_i · Ω_b_α⁻¹
+    # Shapes: (N, 1, *grid, K, K) @ (1, M, *grid, K, K) → (N, M, *grid, K, K)
     omega_b_inv = torch.linalg.inv(omega_b)
-    transport = omega_a.unsqueeze(1) @ omega_b_inv.unsqueeze(0)  # (N, M, K, K)
+    transport = omega_a.unsqueeze(1) @ omega_b_inv.unsqueeze(0)
 
+    # Transport b means: (N, M, *grid, K, K) @ (1, M, *grid, K, 1) → squeeze
     mu_b_t = (transport @ mu_b.unsqueeze(0).unsqueeze(-1)).squeeze(-1)
-    sigma_b_exp = sigma_b.unsqueeze(0).expand(N, -1, K, K)
-    sigma_b_t = transport @ sigma_b_exp @ transport.transpose(-2, -1)
 
-    mu_a_exp = mu_a.unsqueeze(1).expand(-1, M, K)
-    sigma_a_exp = sigma_a.unsqueeze(1).expand(-1, M, K, K)
+    # Transport b covariances: Ω Σ Ω^T
+    sigma_b_t = transport @ sigma_b.unsqueeze(0) @ transport.transpose(-2, -1)
+
+    # Expand a for broadcasting: (N, 1, *grid, ...) → (N, M, *grid, ...)
+    mu_a_exp = mu_a.unsqueeze(1).expand_as(mu_b_t)
+    sigma_a_exp = sigma_a.unsqueeze(1).expand_as(sigma_b_t)
 
     return gaussian_kl(mu_a_exp, sigma_a_exp, mu_b_t, sigma_b_t)
+
+
+def _gate_by_support(field: Tensor, system: MultiAgentSystem) -> Tensor:
+    """Gate a (N, M, *grid_shape) field by agent support functions.
+
+    Multiplies field by χ_i(x) for each agent i, so membership is
+    zero outside the agent's spatial support.
+
+    Handles both spatial agents (grid_shape non-empty) and scalar
+    agents (grid_shape=()) gracefully.
+    """
+    grid_shape = system.grid_shape
+    if not grid_shape:
+        # Scalar agents: chi is trivially 1, no gating needed
+        return field
+
+    chi = torch.stack([a.chi for a in system.agents])  # (N, *grid)
+    # Expand chi for broadcasting: (N, 1, *grid) → (N, M, *grid)
+    return field * chi.unsqueeze(1)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -99,22 +124,21 @@ def _pairwise_kl_cross(system_a: MultiAgentSystem,
 # ─────────────────────────────────────────────────────────────
 
 class SpeciesDetector(nn.Module):
-    """Detects species structure from model alignment.
+    """Detects species structure from model alignment — POINTWISE.
 
     Species = agents sharing a generative model (s_i).
     This is STRUCTURAL and SLOW — it defines what kind of thing
     you are, not what you're currently thinking.
 
-    The species gate S_{iσ} ∈ [0,1] measures how well agent i's
-    model aligns with species σ's canonical model:
+    The species gate is a FIELD over the base manifold:
 
-        S_{iσ} = σ(-KL(s_i || Ω̃_{iσ}[s_σ]) / τ_species)
+        S_{iσ}(x) = σ(-KL(s_i(x) || Ω̃_{iσ}[s_σ(x)]) / τ_species) · χ_i(x)
 
-    τ_species should be LARGE (loose grouping — you don't need
-    exact model match to be the same species, just approximate).
+    At each point x, agent i can only be "species σ" if:
+      1. Its model aligns with species σ's model (KL small)
+      2. It actually EXISTS at point x (χ_i(x) > 0)
 
-    This gates meta-agent formation: you can only join a coalition
-    with agents of your species.
+    τ_species should be LARGE (loose — approximate model match suffices).
 
     Args:
         tau_species: temperature for species detection (larger = looser)
@@ -126,30 +150,33 @@ class SpeciesDetector(nn.Module):
 
     def species_gate(self, children: MultiAgentSystem,
                      parents: MultiAgentSystem) -> Tensor:
-        """Compute species gate S_{iα} from model alignment.
+        """Compute species gate S_{iα}(x) from model alignment.
 
         Args:
             children: N-agent system
             parents: M-agent system (meta-agents / species representatives)
         Returns:
-            (N, M) species gate matrix, entries in [0,1]
+            (N, M, *grid_shape) species gate field, entries in [0,1]
         """
         kl_model = _pairwise_kl_cross(children, parents, fiber='model')
-        return torch.sigmoid(-kl_model / self.tau_species)
+        S = torch.sigmoid(-kl_model / self.tau_species)
+
+        # Gate by support: zero where agent doesn't exist
+        S = _gate_by_support(S, children)
+        return S
 
 
 class CoalitionDetector(nn.Module):
-    """Detects dynamic coalitions from belief alignment.
+    """Detects dynamic coalitions from belief alignment — POINTWISE.
 
     Coalition = agents agreeing on what's happening NOW.
     This is DYNAMIC and FAST — it changes as beliefs update.
 
-    The coalition membership C_{iα} ∈ [0,1]:
+    The coalition membership is a FIELD:
 
-        C_{iα} = σ(-KL(q_i || Ω_{iα}[q_α]) / τ_belief)
+        C_{iα}(x) = σ(-KL(q_i(x) || Ω_{iα}[q_α(x)]) / τ_belief) · χ_i(x)
 
-    τ_belief should be SMALL (tight grouping — coalition members
-    need close agreement on current state).
+    Gated by support: you can only be in a coalition where you exist.
 
     Args:
         tau_belief: temperature for coalition detection (smaller = tighter)
@@ -161,35 +188,41 @@ class CoalitionDetector(nn.Module):
 
     def coalition_membership(self, children: MultiAgentSystem,
                               parents: MultiAgentSystem) -> Tensor:
-        """Compute coalition membership C_{iα} from belief alignment.
+        """Compute coalition membership C_{iα}(x) from belief alignment.
 
         Args:
             children: N-agent system
             parents: M-agent system (meta-agents)
         Returns:
-            (N, M) coalition membership matrix, entries in [0,1]
+            (N, M, *grid_shape) coalition membership field, entries in [0,1]
         """
         kl_belief = _pairwise_kl_cross(children, parents, fiber='belief')
-        return torch.sigmoid(-kl_belief / self.tau_belief)
+        C = torch.sigmoid(-kl_belief / self.tau_belief)
+
+        C = _gate_by_support(C, children)
+        return C
 
 
 class GatedMembership(nn.Module):
-    """Computes effective membership W = S · C (species gates coalition).
+    """Computes effective membership W(x) = S(x) · C(x) — POINTWISE.
 
     The selection rule: you can only join a coalition (meta-agent)
-    if you're the right species. This is like:
-      - Cooper pairs: matching quantum numbers required for pairing
-      - Antibodies: matching shape required for binding
-      - Language: shared grammar required for communication
+    if you're the right species AND you exist at that point.
 
-    W_{iα} = S_{iα} · C_{iα}
+    W_{iα}(x) = S_{iα}(x) · C_{iα}(x)
 
-    S_{iα} = species gate (model alignment, slow, τ_species large)
-    C_{iα} = coalition membership (belief alignment, fast, τ_belief small)
+    This is a FIELD over the base manifold. A bunch of circular
+    agents overlapping creates an irregular-shaped meta-agent
+    whose spatial extent is:
 
-    A human (species=human) can join a human team (coalition) but
-    not an algae collective, even if they happen to have similar
-    beliefs about temperature.
+        χ_α(x) = Σ_i W_{iα}(x)
+
+    The meta-agent's shape EMERGES from the overlap geometry
+    of its members, gated by species compatibility.
+
+    Like Cooper pairs: matching quantum numbers (species) required
+    for pairing (coalition), and pairing only happens where
+    wavefunctions overlap (support intersection).
 
     Args:
         tau_species: species detection temperature (default 5.0, loose)
@@ -203,28 +236,55 @@ class GatedMembership(nn.Module):
 
     def compute(self, children: MultiAgentSystem,
                 parents: MultiAgentSystem) -> Dict[str, Tensor]:
-        """Compute gated membership W = S · C.
+        """Compute gated membership W(x) = S(x) · C(x).
 
         Returns:
-            Dict with 'W' (effective), 'S' (species gate), 'C' (coalition)
+            Dict with 'W', 'S', 'C' — all (N, M, *grid_shape) fields
         """
         S = self.species.species_gate(children, parents)
         C = self.coalition.coalition_membership(children, parents)
         W = S * C
         return {'W': W, 'S': S, 'C': C}
 
+    def meta_agent_indicator(self, children: MultiAgentSystem,
+                              parents: MultiAgentSystem) -> Tensor:
+        """Compute meta-agent indicator fields χ_α(x).
+
+        χ_α(x) = Σ_i W_{iα}(x)
+
+        The SHAPE of each meta-agent on the base manifold.
+        Emerges from the overlap pattern of member agents,
+        gated by species compatibility and belief alignment.
+
+        Args:
+            children: N-agent system
+            parents: M-agent system (meta-agents)
+        Returns:
+            (M, *grid_shape) indicator field for each meta-agent
+        """
+        result = self.compute(children, parents)
+        W = result['W']  # (N, M, *grid_shape)
+        return W.sum(dim=0)  # (M, *grid_shape)
+
 
 class SoftMembership(nn.Module):
-    """Computes differentiable soft membership W_{iα}.
+    """Computes differentiable soft membership W_{iα}(x) — POINTWISE.
+
+    Membership is a FIELD over the base manifold, not a scalar.
+    This means meta-agents have emergent spatial shapes arising
+    from the overlap geometry of their member agents.
 
     Two modes:
 
-    1. GATED (default): W = S · C
+    1. GATED (default): W(x) = S(x) · C(x)
        Species gate (model alignment) × Coalition (belief alignment).
-       Use this for systems with species structure.
+       Both are fields. Meta-agent shape = overlap of species-compatible
+       agents who agree on current beliefs.
 
-    2. UNGATED: W = σ(-KL(s_i || Ω̃_{iα}[s_α]) / τ)
-       Pure model alignment. Use for simple systems.
+    2. UNGATED: W(x) = σ(-KL(s_i(x) || Ω̃[s_α(x)]) / τ) · χ_i(x)
+       Pure model alignment gated by support.
+
+    Output shape: (N, M, *grid_shape) — membership at every point.
 
     Args:
         tau: temperature for ungated mode
@@ -245,35 +305,45 @@ class SoftMembership(nn.Module):
 
     def compute(self, children: MultiAgentSystem,
                 parents: MultiAgentSystem) -> Tensor:
-        """Compute soft membership matrix W_{iα}.
+        """Compute soft membership field W_{iα}(x).
 
         Args:
             children: N-agent system at scale ℓ
             parents: M-agent system at scale ℓ+1
         Returns:
-            (N, M) soft membership matrix W, entries in [0,1]
+            (N, M, *grid_shape) soft membership field, entries in [0,1]
         """
         if self.gated:
             result = self.gated_membership.compute(children, parents)
             return result['W']
         else:
-            # Ungated: pure model alignment
             kl = _pairwise_kl_cross(children, parents, fiber='model')
-            return torch.sigmoid(-kl / self.tau)
+            W = torch.sigmoid(-kl / self.tau)
+            return _gate_by_support(W, children)
 
     def compute_detailed(self, children: MultiAgentSystem,
                           parents: MultiAgentSystem) -> Dict[str, Tensor]:
         """Compute membership with species/coalition breakdown.
 
         Returns:
-            Dict with 'W', 'S' (species), 'C' (coalition)
+            Dict with 'W', 'S', 'C' — all (N, M, *grid_shape) fields
         """
         if self.gated:
             return self.gated_membership.compute(children, parents)
         else:
             kl = _pairwise_kl_cross(children, parents, fiber='model')
-            W = torch.sigmoid(-kl / self.tau)
+            W = _gate_by_support(torch.sigmoid(-kl / self.tau), children)
             return {'W': W, 'S': W, 'C': torch.ones_like(W)}
+
+    def meta_agent_indicator(self, children: MultiAgentSystem,
+                              parents: MultiAgentSystem) -> Tensor:
+        """Compute meta-agent indicator fields χ_α(x) = Σ_i W_{iα}(x).
+
+        Returns:
+            (M, *grid_shape) — the emergent SHAPE of each meta-agent
+        """
+        W = self.compute(children, parents)  # (N, M, *grid_shape)
+        return W.sum(dim=0)  # (M, *grid_shape)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -357,41 +427,70 @@ class CondensationDiagnostics(nn.Module):
         super().__init__()
         self.condensation_threshold = condensation_threshold
 
+    @staticmethod
+    def _reduce_W(W: Tensor) -> Tensor:
+        """Reduce field-valued W to scalar per (i, α) pair.
+
+        W is (N, M, *grid_shape). Returns (N, M) by averaging
+        over the spatial dimensions.
+        """
+        if W.dim() == 2:
+            return W  # already scalar
+        # Average over grid dimensions
+        spatial_dims = tuple(range(2, W.dim()))
+        return W.mean(dim=spatial_dims)
+
     @torch.no_grad()
     def order_parameter(self, children: MultiAgentSystem,
                         parents: MultiAgentSystem,
                         W: Tensor) -> Tensor:
         """Compute Ψ_α for each meta-agent.
 
+        Handles both scalar W (N, M) and field W (N, M, *grid_shape)
+        by reducing the field to scalar membership weights.
+
         Args:
             children: N-agent system at scale ℓ
             parents: M-agent system at scale ℓ+1
-            W: (N, M) soft membership matrix
+            W: (N, M) or (N, M, *grid_shape) membership
         Returns:
             (M,) order parameter for each meta-agent
         """
+        W_scalar = self._reduce_W(W)
+
         N = children.N_agents
         M = parents.N_agents
         K = children.K
 
-        mu_s = children.get_all_mu_s()           # (N, K)
-        omega_child = children.get_all_omega_model()  # (N, K, K)
-        omega_parent = parents.get_all_omega_model()  # (M, K, K)
+        # For order parameter, use grid-averaged model means
+        # (spatial structure of s_i is a field, but order parameter
+        #  measures inter-agent coherence, which is a scalar)
+        mu_s = children.get_all_mu_s()                # (N, *grid, K)
+        omega_child = children.get_all_omega_model()  # (N, *grid, K, K)
+        omega_parent = parents.get_all_omega_model()  # (M, *grid, K, K)
+
+        # Reduce to per-agent means for order parameter
+        spatial_dims_mu = tuple(range(1, mu_s.dim() - 1))
+        if spatial_dims_mu:
+            mu_s_avg = mu_s.mean(dim=spatial_dims_mu)          # (N, K)
+            omega_child_avg = omega_child.mean(dim=spatial_dims_mu)  # (N, K, K)
+            omega_parent_avg = omega_parent.mean(dim=spatial_dims_mu)  # (M, K, K)
+        else:
+            mu_s_avg = mu_s
+            omega_child_avg = omega_child
+            omega_parent_avg = omega_parent
 
         psi = torch.zeros(M, device=mu_s.device)
 
         for alpha in range(M):
-            omega_alpha_inv = torch.linalg.inv(omega_parent[alpha])
-
-            # Transport all children into parent frame
             transported_means = []
             ws = []
             for i in range(N):
-                w = W[i, alpha]
+                w = W_scalar[i, alpha]
                 if w < 1e-6:
                     continue
-                omega_ai = omega_parent[alpha] @ torch.linalg.inv(omega_child[i])
-                mu_t = omega_ai @ mu_s[i]
+                omega_ai = omega_parent_avg[alpha] @ torch.linalg.inv(omega_child_avg[i])
+                mu_t = omega_ai @ mu_s_avg[i]
                 transported_means.append(mu_t)
                 ws.append(w)
 
@@ -399,17 +498,13 @@ class CondensationDiagnostics(nn.Module):
                 psi[alpha] = 0.0
                 continue
 
-            means = torch.stack(transported_means)  # (n, K)
-            ws_t = torch.stack(ws)                    # (n,)
-
-            # Weighted mean
+            means = torch.stack(transported_means)
+            ws_t = torch.stack(ws)
             Z = ws_t.sum()
             mu_bar = (ws_t.unsqueeze(-1) * means).sum(0) / Z
-
-            # Weighted variance
             diff = means - mu_bar.unsqueeze(0)
             var = (ws_t.unsqueeze(-1) * diff ** 2).sum(0) / Z
-            psi[alpha] = var.sum()  # trace of variance
+            psi[alpha] = var.sum()
 
         return psi
 
@@ -450,23 +545,20 @@ class SoftScale:
 # ─────────────────────────────────────────────────────────────
 
 class CrossScaleVFE(nn.Module):
-    """Differentiable cross-scale free energy coupling.
+    """Differentiable cross-scale free energy coupling — POINTWISE.
 
-    The cross-scale VFE penalizes children whose priors deviate from
-    the transported meta-agent beliefs, weighted by membership:
+    The cross-scale VFE is a spatial integral, weighted by field-valued
+    membership W_{iα}(x):
 
-        S_cross = Σ_{i,α} w_{iα} [
-            KL(p_i || Ω_{iα}[q_α])      (belief top-down)
-          + KL(r_i || Ω̃_{iα}[s_α])      (model top-down)
-        ]
+        S_cross = Σ_{i,α} ∫_C W_{iα}(x) [
+            KL(p_i(x) || Ω_{iα}[q_α(x)])      (belief top-down)
+          + KL(r_i(x) || Ω̃_{iα}[s_α(x)])      (model top-down)
+        ] dx
 
-    This is fully differentiable — gradients flow through:
-      w_{iα} (membership), q_α/s_α (meta-agent beliefs),
-      p_i/r_i (child priors), Ω_i/Ω̃_i (gauge frames).
+    When grid_shape=(), this reduces to scalar membership.
 
-    The meta-agent doesn't just impose priors; it provides a gravitational
-    well in KL-space that children fall toward. Stronger membership →
-    stronger pull.
+    The meta-agent provides a spatially-varying gravitational well:
+    stronger membership at a point → stronger top-down constraint there.
 
     Args:
         lambda_belief_topdown: weight for belief top-down coupling
@@ -484,60 +576,42 @@ class CrossScaleVFE(nn.Module):
                 W: Tensor) -> Dict[str, Tensor]:
         """Compute cross-scale VFE contribution.
 
+        Uses _pairwise_kl_cross for grid-safe transport/KL computation.
+
         Args:
             children: N-agent system at scale ℓ
             parents: M-agent system at scale ℓ+1
-            W: (N, M) soft membership matrix
+            W: (N, M, *grid_shape) soft membership field
         Returns:
             Dict with belief_topdown, model_topdown, total
         """
-        N = children.N_agents
-        M = parents.N_agents
-        K = children.K
-        device = W.device
+        # Belief fiber: KL(p_i || Ω_{iα}[q_α]) — pointwise
+        # We need KL between child PRIORS and transported parent BELIEFS
+        # This is slightly different from _pairwise_kl_cross (which does
+        # q_i vs q_α or s_i vs s_α), so we build a helper wrapper.
 
-        # ── Belief fiber: KL(p_i || Ω_{iα}[q_α]) ──
-        mu_p = children.get_all_mu_p()          # (N, K)
-        sigma_p = children.get_all_sigma_p()     # (N, K, K)
-        mu_q_parent = parents.get_all_mu_q()     # (M, K)
-        sigma_q_parent = parents.get_all_sigma_q()  # (M, K, K)
-        omega_child = children.get_all_omega()    # (N, K, K)
-        omega_parent = parents.get_all_omega()    # (M, K, K)
+        # Create temporary "systems" that expose (p_i, Σ_p, Ω) for children
+        # and (q_α, Σ_q, Ω) for parents — but actually _pairwise_kl_cross
+        # already handles the transport correctly. The issue is we want
+        # KL(p_i || transport[q_α]), not KL(q_i || transport[q_α]).
+        # So we compute the KL directly with proper grid handling.
 
-        # Transport: Ω_{iα} = Ω_i Ω_α⁻¹
-        omega_parent_inv = torch.linalg.inv(omega_parent)
-        transport_belief = omega_child.unsqueeze(1) @ omega_parent_inv.unsqueeze(0)
-
-        # Transport parent beliefs: Ω_{iα}[q_α]
-        mu_q_t = (transport_belief @ mu_q_parent.unsqueeze(0).unsqueeze(-1)).squeeze(-1)
-        sigma_q_exp = sigma_q_parent.unsqueeze(0).expand(N, -1, K, K)
-        sigma_q_t = transport_belief @ sigma_q_exp @ transport_belief.transpose(-2, -1)
-
-        # KL(p_i || Ω_{iα}[q_α]) for all (i, α)
-        mu_p_exp = mu_p.unsqueeze(1).expand(-1, M, K)
-        sigma_p_exp = sigma_p.unsqueeze(1).expand(-1, M, K, K)
-        kl_belief = gaussian_kl(mu_p_exp, sigma_p_exp, mu_q_t, sigma_q_t)
+        kl_belief = self._cross_fiber_kl(
+            children.get_all_mu_p(), children.get_all_sigma_p(),
+            children.get_all_omega(),
+            parents.get_all_mu_q(), parents.get_all_sigma_q(),
+            parents.get_all_omega(),
+        )  # (N, M, *grid_shape)
 
         belief_topdown = (W * kl_belief).sum()
 
-        # ── Model fiber: KL(r_i || Ω̃_{iα}[s_α]) ──
-        mu_r = children.get_all_mu_r()           # (N, K)
-        sigma_r = children.get_all_sigma_r()      # (N, K, K)
-        mu_s_parent = parents.get_all_mu_s()      # (M, K)
-        sigma_s_parent = parents.get_all_sigma_s()  # (M, K, K)
-        omega_m_child = children.get_all_omega_model()   # (N, K, K)
-        omega_m_parent = parents.get_all_omega_model()  # (M, K, K)
-
-        omega_m_parent_inv = torch.linalg.inv(omega_m_parent)
-        transport_model = omega_m_child.unsqueeze(1) @ omega_m_parent_inv.unsqueeze(0)
-
-        mu_s_t = (transport_model @ mu_s_parent.unsqueeze(0).unsqueeze(-1)).squeeze(-1)
-        sigma_s_exp = sigma_s_parent.unsqueeze(0).expand(N, -1, K, K)
-        sigma_s_t = transport_model @ sigma_s_exp @ transport_model.transpose(-2, -1)
-
-        mu_r_exp = mu_r.unsqueeze(1).expand(-1, M, K)
-        sigma_r_exp = sigma_r.unsqueeze(1).expand(-1, M, K, K)
-        kl_model = gaussian_kl(mu_r_exp, sigma_r_exp, mu_s_t, sigma_s_t)
+        # Model fiber: KL(r_i || Ω̃_{iα}[s_α]) — pointwise
+        kl_model = self._cross_fiber_kl(
+            children.get_all_mu_r(), children.get_all_sigma_r(),
+            children.get_all_omega_model(),
+            parents.get_all_mu_s(), parents.get_all_sigma_s(),
+            parents.get_all_omega_model(),
+        )  # (N, M, *grid_shape)
 
         model_topdown = (W * kl_model).sum()
 
@@ -549,6 +623,35 @@ class CrossScaleVFE(nn.Module):
             'belief_topdown': belief_topdown,
             'model_topdown': model_topdown,
         }
+
+    @staticmethod
+    def _cross_fiber_kl(mu_a, sigma_a, omega_a,
+                         mu_b, sigma_b, omega_b) -> Tensor:
+        """KL(a_i || Ω_{iα}[b_α]) for all (i,α) pairs, pointwise.
+
+        Args:
+            mu_a: (N, *grid, K)     — child distribution means
+            sigma_a: (N, *grid, K, K) — child covariances
+            omega_a: (N, *grid, K, K) — child gauge frames
+            mu_b: (M, *grid, K)     — parent distribution means
+            sigma_b: (M, *grid, K, K) — parent covariances
+            omega_b: (M, *grid, K, K) — parent gauge frames
+        Returns:
+            (N, M, *grid_shape) KL divergences
+        """
+        # Transport: Ω_{iα} = Ω_a_i · Ω_b_α⁻¹
+        omega_b_inv = torch.linalg.inv(omega_b)
+        transport = omega_a.unsqueeze(1) @ omega_b_inv.unsqueeze(0)
+
+        # Transport parent: Ω_{iα}[b_α]
+        mu_b_t = (transport @ mu_b.unsqueeze(0).unsqueeze(-1)).squeeze(-1)
+        sigma_b_t = transport @ sigma_b.unsqueeze(0) @ transport.transpose(-2, -1)
+
+        # Expand child for broadcasting
+        mu_a_exp = mu_a.unsqueeze(1).expand_as(mu_b_t)
+        sigma_a_exp = sigma_a.unsqueeze(1).expand_as(sigma_b_t)
+
+        return gaussian_kl(mu_a_exp, sigma_a_exp, mu_b_t, sigma_b_t)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -672,6 +775,21 @@ class HierarchicalEmergence(nn.Module):
             details.append(d)
         return details
 
+    def meta_agent_indicators(self) -> List[Tensor]:
+        """Compute meta-agent indicator fields at each scale.
+
+        Returns:
+            List of (N_{ℓ+1}, *grid_shape) indicator fields.
+            Each entry shows the emergent SHAPE of meta-agents at that scale.
+        """
+        indicators = []
+        for ell in range(self.n_levels - 1):
+            chi = self.membership.meta_agent_indicator(
+                self.scales[ell], self.scales[ell + 1]
+            )
+            indicators.append(chi)
+        return indicators
+
     def update_meta_agents(self, memberships: Optional[List[Tensor]] = None):
         """Update meta-agent parameters via precision pooling.
 
@@ -698,8 +816,10 @@ class HierarchicalEmergence(nn.Module):
                             W: Tensor):
         """Precision-pool child beliefs into parent meta-agents.
 
-        For each meta-agent α, compute pooled (μ, Σ) from its
-        soft members and set the meta-agent's parameters.
+        For field-valued W (N, M, *grid_shape), reduces to scalar
+        weights by averaging over spatial dimensions before pooling.
+        The meta-agent's pooled parameters represent the aggregate
+        over all spatial points where membership is nonzero.
         """
         N = children.N_agents
         M = parents.N_agents
@@ -713,9 +833,12 @@ class HierarchicalEmergence(nn.Module):
         sigma_s = children.get_all_sigma_s()
         omega_model = children.get_all_omega_model()
 
+        # Reduce field W to scalar weights for precision pooling
+        W_scalar = CondensationDiagnostics._reduce_W(W)
+
         for alpha in range(M):
             parent = parents.agents[alpha]
-            w = W[:, alpha]  # (N,)
+            w = W_scalar[:, alpha]  # (N,)
 
             # Skip if no significant membership
             if w.sum() < 1e-6:
