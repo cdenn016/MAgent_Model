@@ -85,14 +85,10 @@ class MassMatrix(nn.Module):
                     continue
                 b = beta[i, k].item() if beta.dim() == 2 else beta[i, k].mean().item()
                 # Transport k's precision to i's frame
+                # Precision transforms contravariantly: Λ' = Ω^{-T} Λ Ω^{-1}
                 omega_ik = agent_i.omega.data @ torch.linalg.inv(agent_k.omega.data)
-                Lambda_k_transported = transport_covariance(
-                    torch.linalg.inv(omega_ik).transpose(-2, -1),
-                    agent_k.precision_q.detach()
-                )
-                # Actually: Λ̃ = Ω^{-T} Λ Ω^{-1} which is transport_precision
-                # But for diagonal approx, just use the transported precision
-                Lambda_k_t = omega_ik.transpose(-2, -1) @ agent_k.precision_q.detach() @ omega_ik
+                omega_ik_inv = torch.linalg.inv(omega_ik)
+                Lambda_k_t = omega_ik_inv.transpose(-2, -1) @ agent_k.precision_q.detach() @ omega_ik_inv
                 M_i = M_i + b * Lambda_k_t
 
             # Outgoing recoil mass: Σ_j β_ji Λ_qi

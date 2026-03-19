@@ -294,14 +294,19 @@ class SoftMembership(nn.Module):
     """
 
     def __init__(self, tau: float = 1.0,
-                 tau_species: float = 5.0,
-                 tau_belief: float = 1.0,
+                 tau_species: Optional[float] = None,
+                 tau_belief: Optional[float] = None,
                  gated: bool = True):
         super().__init__()
         self.tau = tau
         self.gated = gated
         if gated:
-            self.gated_membership = GatedMembership(tau_species, tau_belief)
+            # When tau_species/tau_belief not explicitly set, derive from tau:
+            # tau_species defaults to 5× tau (loose species matching)
+            # tau_belief defaults to tau (tight coalition matching)
+            effective_tau_species = tau_species if tau_species is not None else 5.0 * tau
+            effective_tau_belief = tau_belief if tau_belief is not None else tau
+            self.gated_membership = GatedMembership(effective_tau_species, effective_tau_belief)
 
     def compute(self, children: MultiAgentSystem,
                 parents: MultiAgentSystem) -> Tensor:

@@ -481,11 +481,18 @@ class RenormalizationGroupFlow(nn.Module):
         N_new = len(meta_agents)
         new_system = MultiAgentSystem(N_new, self.K, self.grid_shape)
         for i, meta in enumerate(meta_agents):
+            # Belief fiber
             new_system.agents[i].mu_q.data.copy_(meta.mu_q.data)
             new_system.agents[i]._L_q.data.copy_(meta._L_q.data)
             new_system.agents[i].mu_p.data.copy_(meta.mu_p.data)
             new_system.agents[i]._L_p.data.copy_(meta._L_p.data)
             new_system.agents[i].omega.data.copy_(meta.omega.data)
+            # Model fiber
+            new_system.agents[i].mu_s.data.copy_(meta.mu_s.data)
+            new_system.agents[i]._L_s.data.copy_(meta._L_s.data)
+            new_system.agents[i].mu_r.data.copy_(meta.mu_r.data)
+            new_system.agents[i]._L_r.data.copy_(meta._L_r.data)
+            new_system.agents[i].omega_model.data.copy_(meta.omega_model.data)
             new_system.agents[i].agent_id = i
 
         return blocks, new_system

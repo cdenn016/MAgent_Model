@@ -770,7 +770,6 @@ class HierarchicalVFE(nn.Module):
     def forward(self, scales: list,
                 observations: Optional[Tensor] = None,
                 obs_precision: Optional[Tensor] = None,
-                model_priors: Optional[Dict[int, Tuple[Tensor, Tensor]]] = None,
                 transport_fn=None,
                 lattice_gauge=None,
                 vol: Optional[Tensor] = None
@@ -805,7 +804,6 @@ class HierarchicalVFE(nn.Module):
                 system,
                 observations=obs,
                 obs_precision=prec,
-                model_priors=model_priors if s_idx == 0 else None,
                 ancestors=ancestors,
                 transport_fn=transport_fn,
                 lattice_gauge=lattice_gauge,
