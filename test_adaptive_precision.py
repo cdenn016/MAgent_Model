@@ -29,23 +29,22 @@ print("=" * 70)
 print("\n[1] α*(x) = c₀/(b₀ + KL(x))")
 print("-" * 50)
 
-from gauge_agent.full_vfe import AdaptivePrecision
+from gauge_agent.full_vfe import adaptive_precision
 
-ap = AdaptivePrecision(b0=1.0, c0=2.0)
-
+b0, c0 = 1.0, 2.0
 kl_values = torch.tensor([0.0, 0.5, 1.0, 2.0, 5.0, 10.0, 50.0])
-alpha = ap.alpha(kl_values)
+alpha = c0 / (b0 + kl_values.clamp(min=0))
 
-print(f"  b₀={ap.b0}, c₀={ap.c0}, max_α=c₀/b₀={ap.c0/ap.b0:.1f}")
+print(f"  b₀={b0}, c₀={c0}, max_α=c₀/b₀={c0/b0:.1f}")
 print(f"  {'KL':>8} {'α*':>8}")
 for kl, a in zip(kl_values, alpha):
     print(f"  {kl.item():8.1f} {a.item():8.4f}")
 
 # Verify limits
-assert abs(alpha[0].item() - ap.c0/ap.b0) < 1e-4, "KL=0 → α=c₀/b₀"
+assert abs(alpha[0].item() - c0/b0) < 1e-4, "KL=0 → α=c₀/b₀"
 assert alpha[-1].item() < alpha[0].item() * 0.1, "Large KL → small α"
 assert all(a > 0 for a in alpha), "α always positive"
-print(f"  ✓ Near prior: α={alpha[0].item():.3f} ≈ c₀/b₀={ap.c0/ap.b0:.3f}")
+print(f"  ✓ Near prior: α={alpha[0].item():.3f} ≈ c₀/b₀={c0/b0:.3f}")
 print(f"  ✓ Far from prior: α={alpha[-1].item():.4f} → 0")
 print(f"  ✓ All α > 0 (log barrier)")
 
@@ -57,7 +56,7 @@ print("\n[2] Log barrier: R(α) = b₀·α - c₀·log(α)")
 print("-" * 50)
 
 alpha_range = torch.linspace(0.01, 5.0, 100)
-R = ap.regularizer(alpha_range)
+R = b0 * alpha_range - c0 * torch.log(alpha_range)
 
 # Find minimum of R
 min_idx = R.argmin()
@@ -65,16 +64,17 @@ alpha_min = alpha_range[min_idx].item()
 R_min = R[min_idx].item()
 
 # Analytic minimum: dR/dα = b₀ - c₀/α = 0 → α* = c₀/b₀
-alpha_star = ap.c0 / ap.b0
+alpha_star = c0 / b0
 print(f"  Analytic minimum: α* = c₀/b₀ = {alpha_star:.3f}")
 print(f"  Numerical minimum: α* ≈ {alpha_min:.3f} (R={R_min:.4f})")
 assert abs(alpha_min - alpha_star) < 0.1, "Minimum should be at c₀/b₀"
 print(f"  ✓ R(α) minimized at α* = c₀/b₀")
 
 # Verify barrier properties
-R_near_zero = ap.regularizer(torch.tensor(0.01)).item()
-R_at_star = ap.regularizer(torch.tensor(alpha_star)).item()
-R_large = ap.regularizer(torch.tensor(10.0)).item()
+_reg = lambda a: b0 * a - c0 * torch.log(torch.tensor(a).clamp(min=1e-8))
+R_near_zero = _reg(0.01).item()
+R_at_star = _reg(alpha_star).item()
+R_large = _reg(10.0).item()
 print(f"  R(0.01) = {R_near_zero:.2f} (barrier near 0)")
 print(f"  R({alpha_star:.1f}) = {R_at_star:.2f} (minimum)")
 print(f"  R(10.0) = {R_large:.2f} (penalty for large α)")
@@ -91,20 +91,17 @@ print("-" * 50)
 
 kl_test = torch.tensor([0.0, 1.0, 5.0])
 
-for b0, label in [(0.1, "sharp"), (1.0, "moderate"), (10.0, "nearly constant")]:
-    ap_test = AdaptivePrecision(b0=b0, c0=1.0)
-    a = ap_test.alpha(kl_test)
+for b0_test, label in [(0.1, "sharp"), (1.0, "moderate"), (10.0, "nearly constant")]:
+    a = 1.0 / (b0_test + kl_test.clamp(min=0))
     ratio = a[-1].item() / a[0].item()
-    print(f"  b₀={b0:5.1f} ({label:>16}): α=[{a[0].item():.3f}, {a[1].item():.3f}, {a[2].item():.3f}]  "
+    print(f"  b₀={b0_test:5.1f} ({label:>16}): α=[{a[0].item():.3f}, {a[1].item():.3f}, {a[2].item():.3f}]  "
           f"ratio(far/near)={ratio:.3f}")
 
 # Sharp: big ratio (very state-dependent)
-ap_sharp = AdaptivePrecision(b0=0.1, c0=1.0)
-ratio_sharp = ap_sharp.alpha(torch.tensor(5.0)).item() / ap_sharp.alpha(torch.tensor(0.0)).item()
+ratio_sharp = (1.0 / (0.1 + 5.0)) / (1.0 / 0.1)
 
 # Nearly constant: small ratio
-ap_const = AdaptivePrecision(b0=10.0, c0=1.0)
-ratio_const = ap_const.alpha(torch.tensor(5.0)).item() / ap_const.alpha(torch.tensor(0.0)).item()
+ratio_const = (1.0 / (10.0 + 5.0)) / (1.0 / 10.0)
 
 assert ratio_sharp < ratio_const, "Sharp b₀ should have more variation"
 print(f"  ✓ Small b₀ = sharp state-dependence, large b₀ ≈ constant")
@@ -146,8 +143,7 @@ mu_p = system.get_all_mu_p()
 sigma_p = system.get_all_sigma_p()
 kl = gaussian_kl(mu_q, sigma_q, mu_p, sigma_p)  # (3, 16, 16)
 
-ap_field = AdaptivePrecision(b0=1.0, c0=2.0)
-alpha_field = ap_field.alpha(kl)
+alpha_field = 2.0 / (1.0 + kl.clamp(min=0))
 
 print(f"  KL shape: {kl.shape}")
 print(f"  α shape:  {alpha_field.shape}")

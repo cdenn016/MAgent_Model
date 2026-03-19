@@ -118,8 +118,38 @@ class Agent(nn.Module):
         # Ω̃_i ∈ GL(K) — model gauge frame (independent of belief frame)
         self.omega_model = nn.Parameter(_make_omega(init_gauge_scale))
 
+        # ── Precision hyperparameters (model fiber, evolves with ε) ──
+        # α_i = c₀/(b₀ + KL) — log barrier precision (Section 2.11.2)
+        # b₀ controls sensitivity, c₀/b₀ = max precision
+        # These are part of agent's "genotype" — a specialist has high c₀/b₀
+        self._log_b0 = nn.Parameter(torch.tensor(0.0))   # log(b₀) for positivity
+        self._log_c0 = nn.Parameter(torch.tensor(0.0))   # log(c₀) for positivity
+        # Model fiber versions
+        self._log_b0_model = nn.Parameter(torch.tensor(0.0))
+        self._log_c0_model = nn.Parameter(torch.tensor(-0.7))  # c̃₀ < c₀ by default
+
         # Support function χ_i(c)
         self.register_buffer('chi', torch.ones(grid_shape if grid_shape else (1,)))
+
+    @property
+    def b0(self) -> Tensor:
+        """Belief precision sensitivity b₀ > 0."""
+        return self._log_b0.exp()
+
+    @property
+    def c0(self) -> Tensor:
+        """Belief precision strength c₀ > 0."""
+        return self._log_c0.exp()
+
+    @property
+    def b0_model(self) -> Tensor:
+        """Model precision sensitivity b̃₀ > 0."""
+        return self._log_b0_model.exp()
+
+    @property
+    def c0_model(self) -> Tensor:
+        """Model precision strength c̃₀ > 0."""
+        return self._log_c0_model.exp()
 
     @property
     def L_q(self) -> Tensor:
