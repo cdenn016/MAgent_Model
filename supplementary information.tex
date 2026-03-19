@@ -1,0 +1,1221 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath,amssymb,amsfonts,amsthm}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{geometry}
+\usepackage{booktabs}
+\geometry{margin=1in}
+\usepackage{natbib}
+% Theorem environments
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+\newtheorem{proposition}{Proposition}
+\newtheorem{corollary}{Corollary}
+\newtheorem{definition}{Definition}
+\newtheorem{remark}{Remark}
+
+\begin{document}
+
+\title{Supplementary Information: A Theoretical and Computational Implementation of a Participatory ”It From Bit” Universe}
+
+\author{Robert C. Dennis\\
+\small Independent Researcher\\
+\small Email: cdenn016@gmail.com}
+
+\date{\today}
+
+\maketitle
+
+
+
+
+\section*{Explicit Gradient Expressions for SO(3) Gaussian Agents}
+
+We derive explicit natural gradient expressions for gauge-theoretic free energy minimization with Gaussian distributions and SO(3) transport. All operations are gauge covariant.
+
+\subsection*{Setup and Notation}
+
+Agent $i$ maintains belief $q_i = \mathcal{N}(\mu_i, \Sigma_i)$ and prior $p_i = \mathcal{N}(\mu_{p,i}, \Sigma_{p,i})$ over $K$-dimensional fiber. Transport operator $\Omega_{ij} = \exp(\phi_i)\exp(-\phi_j) \in \mathrm{SO}(3)$ acts via representation $\rho: \mathrm{SO}(3) \to \mathrm{GL}(K)$.
+
+The free energy decomposes as:
+\begin{equation}
+S = \sum_i \mathrm{KL}(q_i \| p_i) + \sum_{ij} \beta_{ij} \mathrm{KL}(q_i \| \Omega_{ij}[q_j]) + \sum_{ij} \gamma_{ij} \mathrm{KL}(p_i \| \tilde{\Omega}_{ij}[p_j])
+\end{equation}
+
+Attention weights are defined by:
+\begin{equation}
+\beta_{ij} = \frac{\exp\left[-\kappa_\beta^{-1}\mathrm{KL}(q_i \| \Omega_{ij}[q_j])\right]}{\sum_k \exp\left[-\kappa_\beta^{-1}\mathrm{KL}(q_i \| \Omega_{ik}[q_k])\right]}
+\end{equation}
+
+\subsection*{Free Energy Gradient: Belief Means (Complete)}
+
+The belief alignment term is:
+\begin{equation}
+S_{\mathrm{belief}} = \sum_j \beta_{ij}(\mu_i, \Sigma_i) \, \mathrm{KL}(q_i \| \Omega_{ij}[q_j])
+\end{equation}
+
+Applying the product rule:
+\begin{equation}
+\nabla_{\mu_i} S_{\mathrm{belief}} = \sum_j \left[ \frac{\partial \beta_{ij}}{\partial \mu_i} \mathrm{KL}_{ij} + \beta_{ij} \frac{\partial \mathrm{KL}_{ij}}{\partial \mu_i} \right]
+\end{equation}
+
+The softmax derivative for attention weights gives:
+\begin{equation}
+\frac{\partial \beta_{ij}}{\partial \mu_i} = -\frac{1}{\kappa_\beta} \beta_{ij} \left[\frac{\partial \mathrm{KL}_{ij}}{\partial \mu_i} - \sum_k \beta_{ik} \frac{\partial \mathrm{KL}_{ik}}{\partial \mu_i}\right]
+\end{equation}
+
+For the direct KL gradient:
+\begin{equation}
+\frac{\partial \mathrm{KL}_{ij}}{\partial \mu_i} = (\Omega_{ij}\Sigma_j\Omega_{ij}^T)^{-1}(\mu_i - \Omega_{ij}\mu_j)
+\end{equation}
+
+Substituting and simplifying:
+\begin{align}
+\nabla_{\mu_i} S_{\mathrm{belief}} &= \sum_j \beta_{ij} (\Omega_{ij}\Sigma_j\Omega_{ij}^T)^{-1}(\mu_i - \Omega_{ij}\mu_j) \left[1 - \frac{\mathrm{KL}_{ij}}{\kappa_\beta}\right] \nonumber \\
+&\quad + \frac{1}{\kappa_\beta}\left(\sum_j \beta_{ij}\mathrm{KL}_{ij}\right) \sum_k \beta_{ik} (\Omega_{ik}\Sigma_k\Omega_{ik}^T)^{-1}(\mu_i - \Omega_{ik}\mu_k)
+\end{align}
+
+Including the self-term $\mathrm{KL}(q_i \| p_i)$:
+\begin{equation}
+\boxed{\nabla_{\mu_i} S = \Sigma_i^{-1}(\mu_i - \mu_{p,i}) + \sum_j \beta_{ij} (\Omega_{ij}\Sigma_j\Omega_{ij}^T)^{-1}(\mu_i - \Omega_{ij}\mu_j) \left[1 - \frac{\mathrm{KL}_{ij}}{\kappa_\beta}\right] + R_\mu}
+\end{equation}
+
+where the reweighting term is:
+\begin{equation}
+R_\mu = \frac{1}{\kappa_\beta}\left(\sum_j \beta_{ij}\mathrm{KL}_{ij}\right) \sum_k \beta_{ik} (\Omega_{ik}\Sigma_k\Omega_{ik}^T)^{-1}(\mu_i - \Omega_{ik}\mu_k)
+\end{equation}
+
+The natural gradient is:
+\begin{equation}
+\tilde{\nabla}_{\mu_i} S = \Sigma_i \nabla_{\mu_i} S
+\end{equation}
+
+\subsection*{Free Energy Gradient: Belief Covariances (Complete)}
+
+Similarly for covariances, the product rule gives:
+\begin{equation}
+\nabla_{\Sigma_i} S_{\mathrm{belief}} = \sum_j \left[ \frac{\partial \beta_{ij}}{\partial \Sigma_i} \mathrm{KL}_{ij} + \beta_{ij} \frac{\partial \mathrm{KL}_{ij}}{\partial \Sigma_i} \right]
+\end{equation}
+
+The softmax derivative is:
+\begin{equation}
+\frac{\partial \beta_{ij}}{\partial \Sigma_i} = -\frac{1}{\kappa_\beta} \beta_{ij} \left[\frac{\partial \mathrm{KL}_{ij}}{\partial \Sigma_i} - \sum_k \beta_{ik} \frac{\partial \mathrm{KL}_{ik}}{\partial \Sigma_i}\right]
+\end{equation}
+
+For Gaussian KL divergence:
+\begin{equation}
+\frac{\partial \mathrm{KL}_{ij}}{\partial \Sigma_i} = \frac{1}{2}\left[-\Sigma_i^{-1} + (\Omega_{ij}\Sigma_j\Omega_{ij}^T)^{-1}\right]
+\end{equation}
+
+The complete gradient including self-term is:
+\begin{align}
+\nabla_{\Sigma_i} S &= \frac{1}{2}\left[-\Sigma_i^{-1} + \Sigma_{p,i}^{-1}\right] \nonumber \\
+&\quad + \frac{1}{2}\sum_j \beta_{ij} \left[-\Sigma_i^{-1} + (\Omega_{ij}\Sigma_j\Omega_{ij}^T)^{-1}\right]\left[1 - \frac{\mathrm{KL}_{ij}}{\kappa_\beta}\right] \nonumber \\
+&\quad + \frac{1}{2\kappa_\beta}\left(\sum_j \beta_{ij}\mathrm{KL}_{ij}\right) \sum_k \beta_{ik} \left[-\Sigma_i^{-1} + (\Omega_{ik}\Sigma_k\Omega_{ik}^T)^{-1}\right]
+\end{align}
+
+The natural gradient on $\mathcal{S}_{++}^K$ is:
+\begin{equation}
+\tilde{\nabla}_{\Sigma_i} S = \Sigma_i (\nabla_{\Sigma_i} S) \Sigma_i
+\end{equation}
+
+\textbf{Gauge Covariance:} Under gauge transformation $g \in \mathrm{SO}(3)$:
+\begin{align}
+\Sigma_i &\mapsto g\Sigma_i g^T \\
+\nabla_{\Sigma_i} S &\mapsto g(\nabla_{\Sigma_i} S)g^T \\
+\tilde{\nabla}_{\Sigma_i} S &\mapsto g(\tilde{\nabla}_{\Sigma_i} S)g^T
+\end{align}
+
+This bilinear form $\Sigma (\cdot) \Sigma$ is the unique gauge-covariant gradient structure on $\mathcal{S}_{++}^K$.
+
+\subsection*{Retraction: Staying on the SPD Manifold}
+
+After computing $\tilde{\nabla}_{\Sigma_i} S$, we update via retraction to ensure $\Sigma_i$ remains positive-definite:
+\begin{equation}
+\Sigma_i^{\mathrm{new}} = \mathcal{R}_{\Sigma_i}(-\eta_\Sigma \tilde{\nabla}_{\Sigma_i} S)
+\end{equation}
+
+We use the \textbf{affine-invariant exponential map}:
+\begin{equation}
+\mathcal{R}_{\Sigma}(\Delta) = \Sigma^{1/2} \exp\left(\Sigma^{-1/2} \Delta \Sigma^{-1/2}\right) \Sigma^{1/2}
+\end{equation}
+
+where $\exp(\cdot)$ is the matrix exponential. This retraction:
+\begin{itemize}
+\item Preserves positive-definiteness (exponential of symmetric matrix is SPD)
+\item Is affine-invariant under $\Sigma \mapsto A\Sigma A^T$ for invertible $A$
+\item Is gauge covariant: $\mathcal{R}_{g\Sigma g^T}(g\Delta g^T) = g \mathcal{R}_{\Sigma}(\Delta) g^T$
+\end{itemize}
+
+\textbf{Computational Implementation:} Using eigendecomposition $\Sigma = V\Lambda V^T$:
+\begin{equation}
+\mathcal{R}_{\Sigma}(\Delta) = V \sqrt{\Lambda} \exp\left(\sqrt{\Lambda}^{-1} V^T \Delta V \sqrt{\Lambda}^{-1}\right) \sqrt{\Lambda} V^T
+\end{equation}
+
+This is the Riemannian exponential map---the geodesic retraction following the unique geodesic from $\Sigma$ in direction $\Delta$ for unit parameter.
+
+\subsection*{Complete Gauge Frame Gradients (Product Rule)}
+
+The free energy contains gauge frames $\phi_i$ through both transport operators and attention weights. For the belief alignment term:
+\begin{equation}
+S_{\mathrm{belief}} = \sum_j \beta_{ij}(\phi_i) \, \mathrm{KL}(q_i \| \Omega_{ij}(\phi_i)[q_j])
+\end{equation}
+
+Applying the product rule:
+\begin{equation}
+\nabla_{\phi_i} S_{\mathrm{belief}} = \sum_j \left[ \frac{\partial \beta_{ij}}{\partial \phi_i} \mathrm{KL}(q_i \| \Omega_{ij}[q_j]) + \beta_{ij} \frac{\partial}{\partial \phi_i}\mathrm{KL}(q_i \| \Omega_{ij}[q_j]) \right]
+\end{equation}
+
+\subsubsection*{Term 1: Direct KL Gradient}
+
+For the transported KL divergence, using $\frac{\partial \Omega_{ij}}{\partial \phi_i^a} = G_a \Omega_{ij}$ where $\{G_a\}$ are SO(3) generators:
+\begin{equation}
+\frac{\partial}{\partial \phi_i^a}\mathrm{KL}(q_i \| \Omega_{ij}[q_j]) = \mathrm{tr}\left[G_a \Omega_{ij} \frac{\partial}{\partial \Omega_{ij}}\mathrm{KL}(q_i \| \Omega_{ij}[q_j])\right]
+\end{equation}
+
+For Gaussians, the functional derivative is:
+\begin{equation}
+\frac{\partial}{\partial \Omega_{ij}}\mathrm{KL}(q_i \| \Omega_{ij}[q_j]) = (\Omega_{ij}\Sigma_j\Omega_{ij}^T)^{-1}(\mu_i - \Omega_{ij}\mu_j)\mu_j^T + \mathrm{tr}\left[(\Omega_{ij}\Sigma_j\Omega_{ij}^T)^{-1}\Sigma_j\right]\Omega_{ij}
+\end{equation}
+
+\subsubsection*{Term 2: Attention Weight Gradient (Softmax Derivative)}
+
+The softmax structure of $\beta_{ij}$ yields:
+\begin{equation}
+\frac{\partial \beta_{ij}}{\partial \phi_i^a} = -\frac{1}{\kappa_\beta} \beta_{ij} \left[\frac{\partial}{\partial \phi_i^a}\mathrm{KL}(q_i \| \Omega_{ij}[q_j]) - \sum_k \beta_{ik} \frac{\partial}{\partial \phi_i^a}\mathrm{KL}(q_i \| \Omega_{ik}[q_k])\right]
+\end{equation}
+
+This follows from $\frac{\partial}{\partial x_i}\mathrm{softmax}(x)_j = \mathrm{softmax}(x)_j(\delta_{ij} - \mathrm{softmax}(x)_i)$ applied with $x_j = -\kappa_\beta^{-1}\mathrm{KL}_j$.
+
+\subsubsection*{Combined Gradient (Two-Term Structure)}
+
+Substituting the softmax derivative and simplifying:
+\begin{align}
+\nabla_{\phi_i^a} S_{\mathrm{belief}} &= \sum_j \beta_{ij}\frac{\partial \mathrm{KL}_{ij}}{\partial \phi_i^a}\left[1 - \frac{\mathrm{KL}_{ij}}{\kappa_\beta}\right] \nonumber \\
+&\quad + \frac{1}{\kappa_\beta}\left(\sum_j \beta_{ij}\mathrm{KL}_{ij}\right)\left(\sum_k \beta_{ik}\frac{\partial \mathrm{KL}_{ik}}{\partial \phi_i^a}\right)
+\end{align}
+
+where $\mathrm{KL}_{ij} \equiv \mathrm{KL}(q_i \| \Omega_{ij}[q_j])$.
+
+\subsubsection*{Physical Interpretation}
+
+The complete gradient has two interpretable terms:
+\begin{equation}
+\boxed{\nabla_{\phi_i} S = \underbrace{\sum_j \beta_{ij}\nabla_{\phi_i}\mathrm{KL}_{ij}}_{\text{Direct alignment}} + \underbrace{\frac{1}{\kappa_\beta}\left(\sum_j \beta_{ij}\mathrm{KL}_{ij}\right) \left(\sum_k \beta_{ik}\nabla_{\phi_i}\mathrm{KL}_{ik}\right)}_{\text{Attention reweighting}}}
+\end{equation}
+
+\begin{itemize}
+\item \textbf{Direct alignment:} Gradient of weighted KL divergences (as if $\beta$ were constant)
+\item \textbf{Attention reweighting:} How changing $\phi_i$ redistributes attention across neighbors
+\end{itemize}
+
+When $\kappa_\beta \to \infty$ (soft/uniform attention), the reweighting term vanishes. When $\kappa_\beta \to 0$ (hard attention), reweighting dominates.
+
+\subsubsection*{Prior Alignment (Similar Structure)}
+
+The prior alignment gradient has identical form:
+\begin{equation}
+\nabla_{\phi_i} S_{\mathrm{prior}} = \sum_j \gamma_{ij}\nabla_{\phi_i}\mathrm{KL}(p_i \| \tilde{\Omega}_{ij}[p_j]) + \frac{1}{\kappa_\gamma}\left(\sum_j \gamma_{ij}\mathrm{KL}(p_i \| \tilde{\Omega}_{ij}[p_j])\right)\left(\sum_k \gamma_{ik}\nabla_{\phi_i}\mathrm{KL}_{ik}^p\right)
+\end{equation}
+
+\subsection*{Complete Update Equations}
+
+The gauge-covariant update scheme is:
+\begin{align}
+\mu_i^{t+1} &= \mu_i^t - \eta_\mu \Sigma_i^t \nabla_{\mu_i} S \\
+\Sigma_i^{t+1} &= \left(\Sigma_i^t\right)^{1/2} \exp\left[\left(\Sigma_i^t\right)^{-1/2}\left(-\eta_\Sigma \tilde{\nabla}_{\Sigma_i} S\right)\left(\Sigma_i^t\right)^{-1/2}\right] \left(\Sigma_i^t\right)^{1/2} \\
+\phi_i^{t+1} &= \phi_i^t - \eta_\phi \nabla_{\phi_i} S
+\end{align}
+
+where learning rates satisfy timescale separation $\eta_\mu : \eta_p : \eta_\phi \sim 1 : \epsilon : \epsilon^2$ with $\epsilon \ll 1$.
+
+\subsection*{Computational Complexity}
+
+Per gradient step with $N$ agents, dimension $K$:
+\begin{itemize}
+\item Computing all $\Omega_{ij}$: $O(N^2 K^3)$ matrix exponentials
+\item Computing all transported KL divergences: $O(N^2 K^3)$ inverse covariances
+\item Natural gradient projections: $O(NK^3)$ per agent
+\item Exponential map retraction: $O(NK^3)$ eigendecomposition per agent
+\end{itemize}
+
+Total complexity: $O(N^2 K^3)$ per step, dominated by pairwise coupling.
+
+\subsection*{Numerical Stability and Verification}
+
+\textbf{Positive-Definiteness:} The exponential map retraction $\mathcal{R}_{\Sigma}(\Delta)$ maps to $\mathcal{S}_{++}^K$ for any symmetric $\Delta$, guaranteeing $\Sigma_i \succ 0$ throughout optimization.
+
+\textbf{Gauge Orbit Preservation:} Under simultaneous transformation $\mu_i \mapsto g\mu_i$, $\Sigma_i \mapsto g\Sigma_i g^T$, $\phi_i \mapsto \phi_i + \xi$ for all $i$, the gradients transform covariantly and updates preserve gauge invariance of the free energy functional.
+
+\textbf{Gradient Verification:} All analytical gradients verified against:
+\begin{itemize}
+\item Numerical finite differences (tolerance $10^{-6}$)
+\item PyTorch automatic differentiation (relative error $< 10^{-8}$)
+\end{itemize}
+
+
+
+
+
+
+
+\section{Intuitive Examples and Framework Extensions}
+\label{app:examples}
+
+\subsection{Macroscopic Objects as Meta-Agents: The Rock Example}
+
+To illustrate how the framework applies to familiar physical objects, consider a rock as a concrete example. In our formalism, a rock is not a primitive entity but an emergent meta-agent with hierarchical structure.
+
+A typical rock comprises approximately $10^{23}$ atomic constituents. Each atom functions as a scale-0 agent maintaining beliefs about its local environment - primarily the positions and momenta of neighboring atoms. Atoms in a solid are strongly coupled to their neighbors through electromagnetic interactions, which in our framework manifests as large attention weights $\beta_{\text{atom,neighbor}} \approx 1$. This strong coupling drives belief alignment: atoms in a crystalline lattice maintain highly coherent beliefs about their relative spatial configuration.
+
+When these atomic agents achieve sufficient coherence (small KL divergences between transported beliefs), they form a scale-1 meta-agent - the rock itself. This meta-agent possesses collective belief $q_{\text{rock}}$ representing the consensus configuration of constituent atoms, collective prior $p_{\text{rock}}$ encoding the stable lattice structure characteristic of the material, and collective gauge frame $\phi_{\text{rock}}$ representing the rock's overall internal orientation. The rock's phenomenal geometry - what it would "experience" if it possessed the information integration necessary for experience - is the metric $G_{\text{rock}}$ induced through pullback from its collective belief field.
+
+The rock exhibits slow dynamics characteristic of massive objects. Its Fisher information is large (sharp, confident beliefs about spatial configuration), making belief updates resistant to perturbation. The rock's proper time $\tau_{\text{rock}}$ advances slowly because information updates occur infrequently - the system is near equilibrium. This formalizes the intuition that massive objects have inertia and resist changes in state.
+
+When a human observes the rock, the coupling $\beta_{\text{human,rock}}$ becomes non-zero. This coupling is not direct but mediated by photon agents - electromagnetic quanta that couple strongly to both rock-atoms (scattering) and human-photoreceptors (absorption). The photons function as information carriers, transporting beliefs about the rock's configuration to the human observer. The human agent's beliefs $q_{\text{human}}$ update to align with the transported rock beliefs $\Omega_{\text{human,rock}}[q_{\text{rock}}]$ through free energy minimization. This process is phenomenologically experienced as "seeing the rock," but it is simply agent-agent information coupling mediated by intermediate agents.
+
+Crucially, observation is bidirectional. The rock's state also updates slightly in response to coupling with the human - or more precisely, in response to the photons that scattered from it. For macroscopic rocks, this perturbation is negligible: $\Delta q_{\text{rock}} \approx 0$ because the rock's large Fisher information (high mass) resists updates. For microscopic quantum particles with broad wavefunctions (low Fisher information, high uncertainty), the perturbation can be significant: $\Delta q_{\text{particle}}$ may be large, corresponding to quantum measurement back-action. The classical-quantum distinction emerges from the magnitude of Fisher information rather than from fundamentally different dynamics.
+
+This example illustrates several key principles. First, observation is not a special process but ordinary agent-agent coupling. Second, the observer-observed distinction is conventional rather than ontological - both are agents coupled through information exchange. Third, macroscopic objects emerge as meta-agents from microscopic constituents through consensus formation. Fourth, classical behavior (definite states, negligible back-action) and quantum behavior (superposition, significant back-action) reflect different regimes of the same information-geometric dynamics.
+
+
+\section{Mathematical Details}
+\label{app:math}
+
+\subsection{Gaussian KL Divergence}
+
+For multivariate Gaussian distributions $q = \mathcal{N}(\mu_q, \Sigma_q)$ and $p = \mathcal{N}(\mu_p, \Sigma_p)$ in $\mathbb{R}^K$, the Kullback-Leibler divergence is:
+\begin{equation}
+\mathrm{KL}(q \| p) = \frac{1}{2}\left[\log\frac{|\Sigma_p|}{|\Sigma_q|} + \mathrm{tr}(\Sigma_p^{-1}\Sigma_q) + (\mu_p - \mu_q)^\top\Sigma_p^{-1}(\mu_p - \mu_q) - K\right]
+\end{equation}
+
+This formula is used throughout for computing belief and prior alignment terms in the free energy functional.
+
+\subsection{Fisher Information Matrix for Gaussians}
+
+The Fisher information matrix for Gaussian distributions parametrized by $\theta = (\mu, \Sigma)$ has block structure:
+\begin{equation}
+F = \begin{pmatrix}
+\Sigma^{-1} & 0 \\
+0 & \frac{1}{2}(\Sigma^{-1} \otimes \Sigma^{-1})
+\end{pmatrix}
+\end{equation}
+
+The natural gradient is then:
+\begin{align}
+\tilde{\nabla}_\mu S &= \Sigma (\nabla_\mu S) \\
+\tilde{\nabla}_\Sigma S &= \Sigma (\nabla_\Sigma S) \Sigma
+\end{align}
+
+where $\nabla_\mu S$ and $\nabla_\Sigma S$ are standard Euclidean gradients.
+
+\subsection{SO(3) Generators and Transport Operators}
+
+For gauge group $G = \mathrm{SO}(3)$, we use irreducible representations of dimension $K = 2\ell + 1$ where $\ell$ is the spin quantum number. The generators $\{G_x, G_y, G_z\}$ are real skew-symmetric $K \times K$ matrices satisfying:
+\begin{equation}
+[G_i, G_j] = \epsilon_{ijk} G_k
+\end{equation}
+
+Transport operators are computed via matrix exponential:
+\begin{equation}
+\Omega_{ij}(c) = \exp(\phi_i(c)) \exp(-\phi_j(c))
+\end{equation}
+
+where $\phi_i(c) = \phi_i^x(c) G_x + \phi_i^y(c) G_y + \phi_i^z(c) G_z \in \mathfrak{so}(3)$.
+
+For computational efficiency, we use the Baker-Campbell-Hausdorff formula when gauge field strengths are small. Full implementation details are available in the public code repository.
+
+\subsection{Numerical Stability and Cholesky Parametrization}
+
+Covariance matrices $\Sigma_i$ must remain positive-definite throughout optimization. We enforce this through Cholesky parametrization:
+\begin{equation}
+\Sigma_i = L_i L_i^\top
+\end{equation}
+
+where $L_i$ is lower triangular with positive diagonal entries. Gradients are computed with respect to $L_i$ rather than $\Sigma_i$ directly, ensuring the positive-definite constraint is automatically satisfied. This approach proved essential for numerical stability in our implementations.
+
+
+
+
+
+
+\section{Covariance Dynamics and Equilibrium Analysis}
+\label{app:covariance_dynamics}
+
+\subsection{Covariance Gradient of the Generalized Free Energy}
+
+Here we derive the gradient of the single-agent free energy $\mathcal{F}_i$ with respect to the covariance $\Sigma_i$ for agent $i$; a well known result in information geometry.
+
+The free energy decomposes as
+
+\begin{equation}
+\mathcal{F}_i
+=D_{\mathrm{KL}}(q_i \,\|\, p_i)
++ \sum_{j \neq i} \beta_{ij}\,
+D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j)
+- \mathbb{E}_{q_i}[\log p(o_i \mid k_i)],
+\end{equation}
+
+where $q_i = \mathcal{N}(\mu_i, \Sigma_i)$, $p_i = \mathcal{N}(\mu_{p,i}, \Sigma_{p,i})$, and $\sum_j \beta_{ij} = 1$ by construction.
+
+\subsubsection{Gaussian KL divergence and its derivative}
+
+For two Multivariate Gaussians, we have 
+
+\begin{align}
+D_{\mathrm{KL}}\!\left(
+\mathcal{N}(\mu_1, \Sigma_1)
+\,\|\, 
+\mathcal{N}(\mu_2, \Sigma_2)
+\right)
+&=
+\frac{1}{2}
+\Big[
+\log \frac{|\Sigma_2|}{|\Sigma_1|}
++ \mathrm{tr}\!\big(\Sigma_2^{-1}\Sigma_1\big)
+\\ &\quad
++ (\mu_2 - \mu_1)^\top
+  \Sigma_2^{-1}
+  (\mu_2 - \mu_1)
+- d
+\Big].
+\label{eq:gaussian_KL}
+\end{align}
+
+
+and differentiating w.r.t.\ $\Sigma_1$ (holding $\mu_1,\mu_2,\Sigma_2$ fixed) gives
+
+\begin{equation}
+\frac{\partial D_{\mathrm{KL}}}{\partial \Sigma_1}
+=\frac{1}{2}\left[
+-\Sigma_1^{-1}
++ \Sigma_2^{-1}
+\right].
+\end{equation}
+
+Applying this to each term in $\mathcal{F}_i$:
+
+\begin{align}
+\frac{\partial}{\partial \Sigma_i}
+D_{\mathrm{KL}}(q_i \,\|\, p_i)
+&=\frac{1}{2}\left[
+-\Sigma_i^{-1}
++ \Sigma_{p,i}^{-1}
+\right],
+\\[6pt]
+\frac{\partial}{\partial \Sigma_i}
+D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j)
+&=
+\frac{1}{2}\left[
+-\Sigma_i^{-1}
++ (\Omega_{ij}\Sigma_j\Omega_{ij}^\top)^{-1}
+\right].
+\end{align}
+
+The observation term contributes an $O(\Sigma_i^{-1})$ correction that we neglect in the high-precision / strong-alignment regime. Thus
+
+\begin{equation}
+\boxed{
+\frac{\partial \mathcal{F}_i}{\partial \Sigma_i}
+=\frac{1}{2}
+\left[
+-2 \Sigma_i^{-1}
++ \Sigma_{p,i}^{-1}
++ \sum_j \beta_{ij}
+(\Omega_{ij}\Sigma_j\Omega_{ij}^\top)^{-1}
+\right].
+}
+\label{eq:Sigma_gradient_final}
+\end{equation}
+
+Because $\sum_j \beta_{ij} = 1$, there is no $(1 + \sum_j \beta_{ij})$ prefactor in front of $\Sigma_i^{-1}$.
+
+\subsection{Fixed-Point Equation and Symmetric Solution}
+
+At equilibrium, we set $\partial \mathcal{F}_i / \partial \Sigma_i = 0$, giving
+
+\begin{equation}
+\Sigma_i^{-1}
+=\frac{1}{2}
+\left[
+\Sigma_{p,i}^{-1}
++ \sum_j \beta_{ij}
+(\Omega_{ij}\Sigma_j\Omega_{ij}^\top)^{-1}
+\right].
+\label{eq:sigma_fixed_point_beta}
+\end{equation}
+
+This is a matrix-valued fixed-point equation coupling all agents: each agent’s precision is the $\beta$-weighted combination of its own prior precision and the transported neighbor precisions.
+
+\subsubsection{Homogeneous limit}
+
+In the homogenous limit we assume 
+
+(i) all agents are identical, so $\Sigma_i = \Sigma_\infty$ for all $i$,
+
+(ii) $\Omega_{ij} \approx I$ (weak misalignment),
+
+(iii) $\Sigma_{p,i} = \Sigma_0$ (shared prior).
+
+Then \eqref{eq:sigma_fixed_point_beta} becomes
+
+\begin{equation}
+\Sigma_\infty^{-1}
+=\frac{1}{2}
+\left[
+\Sigma_0^{-1}
++ \Sigma_\infty^{-1}
+\right]
+\quad\Longrightarrow\quad
+\Sigma_\infty = \Sigma_0.
+\end{equation}
+
+Hence, in a perfectly symmetric population, the equilibrium covariance reproduces the shared prior.
+
+\subsubsection{Alignment-dominated regime}
+
+Although $\sum_j \beta_{ij} = 1$, the effective strength of alignment is controlled by the parameter $\tau$ in
+
+\begin{equation}
+\beta_{ij}
+=\frac{
+\exp\!\left[
+-\frac{1}{\tau}
+D_{\mathrm{KL}}\!\big(q_i \,\|\, \Omega_{ij} q_j\big)
+\right]
+}{\sum_k
+\exp\!\left[
+-\frac{1}{\tau}
+D_{\mathrm{KL}}\!\big(q_i \,\|\, \Omega_{ik} q_k\big)
+\right]}.
+\end{equation}
+
+As $\tau \to 0$, $\beta_{ij}$ becomes sharply peaked on whichever neighbor $j$ best agrees (after transport). In that low-$\tau$ limit, the prior precision $\Sigma_{p,i}^{-1}$ becomes negligible relative to the socially enforced alignment term, and
+
+\begin{equation}
+\boxed{
+\Sigma_i^{-1}
+\;\approx\;
+\sum_j \beta_{ij}
+(\Omega_{ij}\Sigma_j\Omega_{ij}^\top)^{-1}
+\;=\;\big\langle(\Omega_{ij}\Sigma_j\Omega_{ij}^\top)^{-1}
+\big\rangle_{\beta}.}
+\label{eq:beta_weighted_precision}
+\end{equation}
+
+Here $\langle \cdot \rangle_{\beta}$ denotes a $\beta$-weighted expectation over neighbors.  
+
+Therefore, in the strong-alignment (i.e. small $\tau$) regime, agent $i$’s precision matrix becomes the $\beta$-weighted average of its neighbors' transported precisions.
+
+When, additionally, all agents already have approximately equal covariances and the transports are near-identity, i.e. $\Sigma_i \approx \Sigma_j$ and $\Omega_{ij} \approx I$, then \eqref{eq:beta_weighted_precision} implies
+
+\begin{equation}
+\Sigma_i^{-1} \approx \Sigma_j^{-1}
+\quad\Longrightarrow\quad
+\Sigma_i \approx \Omega_{ij}\Sigma_j\Omega_{ij}^\top,
+\end{equation}
+
+justifying the alignment assumption used in the main text.
+
+\subsubsection{Gradient flow dynamics}
+
+Finally, consider the gradient flow
+
+\begin{equation}
+\frac{d\Sigma_i}{dt}
+=-\eta_\Sigma
+\frac{\partial \mathcal{F}_i}{\partial \Sigma_i},
+\qquad\eta_\Sigma > 0.
+\end{equation}
+
+Local stability of the equilibrium \eqref{eq:sigma_fixed_point_beta} follows from the positive-definiteness of the Hessian. For the Gaussian KL terms,
+
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}}{\partial \Sigma_1 \, \partial \Sigma_1}
+\;\sim\;
+\Sigma_1^{-1} \otimes \Sigma_1^{-1}
++ \Sigma_2^{-1} \otimes \Sigma_2^{-1},
+\end{equation}
+
+which is manifestly positive definite for $\Sigma_1,\Sigma_2.
+
+Hence the covariance alignment fixed-point is an attractor of the variational dynamics.
+
+Therefore, we find that $\Sigma_i \approx \Omega_{ij}\Sigma_j\Omega_{ij}^\top$ emerges from the dynamics itself rather than as an imposed constraint.
+
+
+
+
+
+
+
+
+\section{Relating The Quadratic Forms to Transported KL Divergences}
+We now show that the pairwise quadratic expectations in \eqref{eq:free_energy_expanded} can be expressed in terms of KL divergences between transported distributions (see appendix for general requirement of the forward KL).
+\subsection{Exact expansion for Gaussian beliefs}
+For independent Gaussians $q_i = \mathcal{N}(\mu_{q,i},\Sigma_{q,i})$ and $q_j = \mathcal{N}(\mu_{q,j},\Sigma_{q,j})$, the expectation of a quadratic form is
+\begin{equation}
+\mathbb{E}_{q_i q_j}[\delta^\top A \delta]
+= \mathrm{tr}\!\big(A\,\mathrm{Cov}(\delta)\big)
++ \bar{\delta}^\top A \bar{\delta},
+\label{eq:quadratic_expectation_formula}
+\end{equation}
+where $\delta = k_i - \Omega_{ij}k_j$, $\bar{\delta} = \mathbb{E}[\delta] = \mu_{q,i} - \Omega_{ij}\mu_{q,j}$, and
+\begin{equation}
+\mathrm{Cov}(\delta) = \Sigma_{q,i} + \Omega_{ij}\Sigma_{q,j}\Omega_{ij}^\top.
+\label{eq:delta_covariance}
+\end{equation}
+Applying \eqref{eq:quadratic_expectation_formula} with $A = \Lambda_{ij}$:
+\begin{equation}
+\begin{aligned}
+\mathbb{E}_{q_i q_j}
+[(k_i-\Omega_{ij}k_j)^\top\Lambda_{ij}(k_i-\Omega_{ij}k_j)]
+&=\mathrm{tr}\!\big[\Lambda_{ij}(\Sigma_{q,i}+\Omega_{ij}\Sigma_{q,j}\Omega_{ij}^\top)\big]\\
+&\quad+(\mu_{q,i}-\Omega_{ij}\mu_{q,j})^\top
+\Lambda_{ij}
+(\mu_{q,i}-\Omega_{ij}\mu_{q,j}).
+\end{aligned}
+\label{eq:belief_quadratic_expansion}
+\end{equation}
+An identical expansion holds for the model channel with $\Gamma_{ij}$ and $\tilde{\Omega}_{ij}$.
+
+We observe that we can choose the coupling precisions $\Lambda_{ij}$ and $\Gamma_{ij}$ to make \eqref{eq:belief_quadratic_expansion} proportional to a KL divergence.
+
+Specifically, we define
+\begin{equation}
+\Lambda_{ij}:=\tau^{(q)}_{ij}\,(\Omega_{ij}\Sigma_{q,j}\Omega_{ij}^\top)^{-1},
+\qquad 
+\Gamma_{ij}:=\tau^{(p)}_{ij}\,(\tilde{\Omega}_{ij}\Sigma_{p,j}\tilde{\Omega}_{ij}^\top)^{-1},
+\label{eq:precision_choice}
+\end{equation}
+where $\tau^{(q)}_{ij}, \tau^{(p)}_{ij} > 0$ are dimensionless coupling strengths.
+
+Recall that the KL divergence between two Gaussians $q_i = \mathcal{N}(\mu_i,\Sigma_i)$ and $\Omega_{ij}q_j = \mathcal{N}(\Omega_{ij}\mu_j, \Omega_{ij}\Sigma_j\Omega_{ij}^\top)$ is
+$$
+D_{\mathrm{KL}}(q_i\,\|\,\Omega_{ij}q_j)
+= \frac{1}{2}
+\Big[
+\mathrm{tr}\!\big((\Omega_{ij}\Sigma_j\Omega_{ij}^\top)^{-1}\Sigma_i\big)
+- d_q
+$$
+$$
++ \log \frac{\det(\Omega_{ij}\Sigma_j\Omega_{ij}^\top)}{\det \Sigma_i}
++ (\mu_i - \Omega_{ij}\mu_j)^\top
+(\Omega_{ij}\Sigma_j\Omega_{ij}^\top)^{-1}
+(\mu_i - \Omega_{ij}\mu_j)
+\Big].
+\label{eq:kl_full}
+$$
+When beliefs are approximately aligned (the regime enforced by the coupling itself), the covariances satisfy $\Sigma_i \approx \Omega_{ij}\Sigma_j\Omega_{ij}^\top$, and the trace and log-determinant terms approximately cancel. In this alignment regime, as shown in the appendix, the quadratic expectation becomes
+\begin{equation}
+\frac{1}{4}\mathbb{E}_{q_i q_j}
+[(k_i-\Omega_{ij}k_j)^\top\Lambda_{ij}(k_i-\Omega_{ij}k_j)]
+\approx
+\frac{\tau^{(q)}_{ij}}{2}\,D_{\mathrm{KL}}(q_i\,\|\,\Omega_{ij}q_j)+\text{const},
+\label{eq:belief_kl_relation}
+\end{equation}
+where the constant absorbs dimension-dependent terms and $O(\|\Delta\|^2)$ covariance mismatch corrections.
+
+Similarly for the model channel:
+\begin{equation}
+\frac{1}{4}\mathbb{E}_{s_i s_j}
+[(m_i-\tilde{\Omega}_{ij}m_j)^\top\Gamma_{ij}(m_i-\tilde{\Omega}_{ij}m_j)]
+\approx
+\frac{\tau^{(p)}_{ij}}{2}\,D_{\mathrm{KL}}(s_i\,\|\,\tilde{\Omega}_{ij}s_j)+\text{const}.
+\label{eq:model_kl_relation}
+\end{equation}
+\subsection{Defining normalized alignment weights}
+To obtain the standard form, we define normalized alignment weights
+\begin{equation}
+\beta_{ij}:=\frac{\tau^{(q)}_{ij}}{2},
+\qquad
+\gamma_{ij}:=\frac{\tau^{(p)}_{ij}}{2}.
+\label{eq:normalized_weights}
+\end{equation}
+These weights have a clear interpretation: $\beta_{ij}$ measures the strength of belief alignment between agents $i$ and $j$, while $\gamma_{ij}$ measures model alignment strength. In the limit $\beta_{ij} \to \infty$ with fixed $\gamma_{ij}$, agents' beliefs are forced to perfect agreement after transport, while their models may still differ. Conversely, $\gamma_{ij} = 0$ decouples model alignment entirely. In all subsequence equations we taked $\tau$ to be independent of each agent - a constant global value which we set to 1.
+
+
+
+
+
+
+
+\section{Conditional Uniqueness of the Forward KL Divergence via Variational Duality}
+
+We now show that, within a broad but well-defined class of variational games, the forward KL divergence $D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j)$ is the only divergence that yields a closed-form Gibbs-type solution for the belief update and a consistent dual interpretation for the attention weights.  Agents locally minimize their agent-specific variational free energy and the system of agents minimize their collective global free energies.  This local-global coordination gives rise to the expected forward KL attention term.
+
+Here we are restricting the the matched-fiber case.  The full generalization follows by applying the appropriate bundle morphisms/intertwiners.
+
+The uniqueness of this term is conditional and follows from three assumptions:
+
+\begin{enumerate}
+  \item $\mathcal{D}$ is local in $c$, of f-divergence form $\displaystyle \int q_i(c)\, f\!\left(\frac{q_i(c)}{\Omega_{ij}(c) q_j(c)}\right) dc$,
+  \item the coupling is linear
+  \item the minimizing belief, $q_i^*$, remains in the exponential-family (log-linear) class.
+\end{enumerate}
+
+\subsubsection{The Coupled Variational Problem}
+Each agent $i$ minimizes a local free-energy functional:
+
+\begin{equation}
+F_i[\beta_i]
+=\min_{q_i}
+\Big\{
+D_{\mathrm{KL}}(q_i \,\|\, p_i)
++ \sum_{j\neq i} \beta_{ij}\,\mathcal{D}(q_i,q_j)
+\Big\},
+\label{eq:F_i}
+\end{equation}
+
+For notational convenience, we can decompose the KL divergence as:
+
+\begin{equation}
+D_{\mathrm{KL}}(q_i \,\|\, p_i) = \langle H_i \rangle_{q_i} + S(q_i) + \text{const},
+\end{equation}
+
+where
+
+\begin{align}
+H_i(c) &:= -\log p_i(c) \quad \text{(local "energy")}, \\
+S(q_i) &:= -\int q_i(c) \log q_i(c)\,dc \quad \text{(Shannon entropy)}, \\
+\langle H_i \rangle_{q_i} &:= \int q_i(c) H_i(c)\,dc \quad \text{(expected energy)}.
+\end{align}
+
+This gives $D_{\mathrm{KL}}(q_i \,\|\, p_i) = \int q_i(c)[\log q_i(c) - \log p_i(c)]\,dc$.
+
+The attention weights $\beta_{ij}\ge 0$ (with $\sum_j \beta_{ij}=1$) are subsequently chosen by optimizing
+
+\begin{equation}
+\mathcal{J}_i(\beta_i)
+=\sum_{j\neq i}\beta_{ij} C_{ij}
++ \tau \sum_{j\neq i}\beta_{ij}\log\beta_{ij},
+\label{eq:J_i}
+\end{equation}
+
+where $C_{ij}$ denotes the marginal cost of attending to agent $j$ as we've described above.
+
+We shall later identify
+
+\begin{equation}
+C_{ij} := \frac{\partial S_i}{\partial \beta_{ij}},
+\end{equation}
+
+so that attention weights allocate resources in proportion to marginal coordination penalties.
+
+\subsubsection{Forward KL and the Geometric-Mean Solution}
+Let $\mathcal{D}(q_i,q_j) = D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j)$, where
+
+\[
+\frac{\delta D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j)}{\delta q_i(c)} 
+= \log\frac{q_i(c)}{\Omega_{ij}(c) q_j(c)} + 1.
+\]
+
+The stationary condition for \eqref{eq:F_i} is
+
+\begin{equation}
+H_i(c)
++ \log q_i(c)
++ \sum_j \beta_{ij}
+\!\left[
+\log\frac{q_i(c)}{\Omega_{ij}(c)q_j(c)}+1
+\right]
+= \lambda_i,
+\end{equation}
+
+with $\lambda_i$ enforcing normalization.
+
+Rearranging and solving for $q_i(c)$ gives a Boltzmann distribution whose mean field is a geometric average of transported neighbor beliefs.
+
+\begin{equation}
+q_i^*(c)
+= \frac{1}{Z_i}
+e^{-H_i(c)/2}
+\prod_j
+[\Omega_{ij}(c) q_j(c)]^{\beta_{ij}/2},
+\label{eq:q_i_star}
+\end{equation}
+
+This structure is preserved only for the forward KL divergence; alternative divergences destroy the log-linearity of the exponent.
+
+\subsubsection{Dual Relation via the Envelope Theorem}
+At the stationary value $q_i^*$, the envelope theorem implies
+
+\begin{equation}
+\frac{\partial F_i}{\partial \beta_{ij}}
+= \mathcal{D}(q_i^*, q_j)
+= D_{\mathrm{KL}}(q_i^* \,\|\, \Omega_{ij} q_j),
+\label{eq:envelope}
+\end{equation}
+
+such that the marginal cost of increasing attention to $j$ equals the forward KL divergence between the updated belief $q_i^*$ and the transported neighbor $\Omega_{ij} q_j$ into $i$'s frame.
+
+This identifies the attention cost with the KL.
+
+\subsubsection{Reverse and Symmetric KL Forms}
+If instead $\mathcal{D}(q_i,q_j) = D_{\mathrm{KL}}(\Omega_{ij}q_j \,\|\, q_i)$, the stationary condition becomes
+
+\begin{equation}
+H_i(c)
++ \log q_i(c)
+- \sum_j \beta_{ij}
+\frac{\Omega_{ij}(c) q_j(c)}{q_i(c)}
+= \text{const},
+\end{equation}
+
+introducing terms as $1/q_i$ and leading to a transcendental stationary equation without a closed-form solution destroying the exponential family requirement above.
+
+Likewise, the symmetrized divergence
+
+\[
+\mathcal{D}_{\mathrm{sym}}(q_i,q_j)
+= \tfrac{1}{2}\!\left[
+D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j)
++ D_{\mathrm{KL}}(\Omega_{ij} q_j \,\|\, q_i)
+\right]
+\]
+
+mixes $\log q_i$ and $1/q_i$ terms, again breaking log-linearity.\\
+Hence, among local f-divergences, only the forward KL preserves exponential-family closure.
+
+\subsubsection{Conditional Uniqueness Theorem}
+Let $\mathcal{D}(q_i,q_j)$ be any local $f$-divergence
+
+\[
+\mathcal{D}(q_i,q_j)
+= \int q_i(c)\,
+f\!\left(\frac{q_i(c)}{\Omega_{ij}(c) q_j(c)}\right)
+dc,
+\]
+
+that enters linearly in \eqref{eq:F_i}, and further suppose that the stationary distribution $q_i^*$ is log-linear in $\{H_i,\Omega_{ij}q_j\}$.
+
+Then the following are equivalent:
+
+\begin{enumerate}
+  \item $q_i^*$ has the geometric-mean Boltzmann form \eqref{eq:q_i_star};
+  \item $\mathcal{D}(q_i,q_j)=D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j)$;
+  \item $C_{ij}=\dfrac{\partial F_i}{\partial\beta_{ij}}
+=D_{\mathrm{KL}}(q_i^* \,\|\, \Omega_{ij}q_j).$
+\end{enumerate}
+
+Proof sketch
+
+(2) $\Rightarrow$ (1) follows from direct solution of the stationary condition.
+
+(1) $\Rightarrow$ (2):
+
+Assume the solution is log-linear \eqref{eq:q_i_star}.\\
+Substituting this into the stationarity condition gives
+
+\[
+\frac{\delta \mathcal{D}}{\delta q_i(c)}
+\Big|_{q_i^*}
+= \log\frac{q_i^*(c)}{\Omega_{ij}(c) q_j(c)} + 1.
+\]
+
+Next, integrating, we find
+
+\[
+\mathcal{D}(q_i^*,q_j)
+= \int q_i^*(c)
+\log\frac{q_i^*(c)}{\Omega_{ij}(c) q_j(c)}\,dc
++ \text{const}.
+\]
+
+We require that $\mathcal{D}(q,q)=0$ thereby fixing the constant to be zero thus producing the forward KL form.
+
+(3) $\Rightarrow$ (2):
+
+By the envelope theorem \eqref{eq:envelope}, the only divergence consistent with a linear $\beta_{ij}$-coupling and this derivative structure is the forward KL.
+
+\subsubsection{Interpretations}
+\begin{enumerate}
+  \item \textbf{Gauge invariance}\\
+The comparison is made between $q_i$ and the transported $\Omega_{ij}q_j$ in the same frame (and similarly for $j \rightarrow i$). Gauge covariance fixes what is compared, while variational duality fixes how it is compared.
+  \item \textbf{Variational duality}\\
+\\
+The forward KL is the only divergence that simultaneously yields:
+  \begin{itemize}
+    \item a closed-form Boltzmann solution for $q_i$, and
+    \item a consistent dual cost $C_{ij} = \partial F_i / 
+\partial \beta_{ij}$.
+  \end{itemize}
+  \item \textbf{Information geometry}\\
+\\
+The forward KL is the Bregman divergence generated by the negative entropy potential, whose Hessian induces the Fisher-Rao metric and yields the m/e-projection (mixed/exponential family) Pythagorean theorem. These global properties are not shared by generic f-divergences.
+\end{enumerate}
+
+\subsubsection{Summary}
+Under the natural assumptions of locality, linear coupling, and exponential-family closure, the forward KL divergence
+
+\[
+\boxed{
+C_{ij}=D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j)}
+\]
+
+is not merely a modeling choice but a necessary consequence\\
+of the variational and geometric structure underlying agent coordination.  It is furthermore rotationally invariant under $SO(N)$ and $SU(N)$.
+
+\subsubsection{Connection to the Gauge-Covariant Free Energy}
+The conditional uniqueness result above justifies the specific form of the alignment terms appearing in the generalized variational free energy:
+
+$$
+\mathcal{S}
+=\sum_i D_{\mathrm{KL}}(q_i \,\|\, p_i)
++ \sum_i D_{\mathrm{KL}}(s_i \,\|\, r_i)
++ \sum_{i,j}\beta_{ij}\,D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j) 
+$$
+
+$$
++ \sum_{i,j}\gamma_{ij}\,D_{\mathrm{KL}}(s_i \,\|\, \tilde{\Omega}_{ij}s_j)- \mathbb{E}_q[\log p(o|\{k_i,m_i\})].
+$$
+
+Each coupling term, such as
+
+$$
+\beta_{ij}\,D_{\mathrm{KL}}(q_i \,\|\, \Omega_{ij} q_j),
+$$
+
+is therefore not arbitrary: it arises uniquely from the requirement that
+
+\begin{enumerate}
+  \item belief updates $q_i$ admit an exponential-family form consistent with local free energy minimization,
+  \item attention weights $\beta_{ij}$ act as variational dual variables conjugate to those divergences, and
+  \item comparisons between agents are made in gauge-aligned coordinates through the transport operators $\Omega_{ij}$.
+\end{enumerate}
+
+Therefore, the forward KL plays the role of the canonical gauge-covariant coupling between agents' beliefs/models, unifying variational and geometric principles.
+
+Reverse or symmetric divergences would violate at least one of these constraints: they either destroy exponential-family closure, break dual consistency $\big(C_{ij} = \partial F_i / \partial \beta_{ij}\big)$, or fail to respect the gauge-covariant comparison structure. Thus, the gauge-covariant free energy \eqref{eq:generalized_F} naturally inherits the unique forward-KL alignment form as a direct consequence of its underlying variational geometry.
+
+
+
+\subsection{Softmax Attention via Maximum Entropy Principle}
+Given alignment cost $C_{ij} = D_{\mathrm{KL}}(q_i \| \Omega_{ij}q_j)$ above, we seek attention weights $\beta_{ij}$ that:
+
+\begin{enumerate}
+  \item Minimize expected disagreement: $\sum_j \beta_{ij} C_{ij}$
+  \item Maximize uncertainty (entropy): $-\sum_j \beta_{ij}\log\beta_{ij}$
+  \item Satisfy normalization: $\sum_j \beta_{ij} = 1$
+\end{enumerate}
+
+Following Jaynes' maximum entropy principle, we maximize entropy subject to the constraint that expected cost equals some target $\langle C \rangle$:
+
+\begin{equation}
+\max_{\{\beta_{ij}\}} \left\{-\sum_j \beta_{ij}\log\beta_{ij}\right\}
+\end{equation}
+
+subject to:\\
+\begin{align}
+\sum_j \beta_{ij} &= 1, \\
+\sum_j \beta_{ij} C_{ij} &= \langle C \rangle.
+\end{align}
+
+\textbf{Lagrangian:}
+
+\begin{equation}
+\mathcal{J} = -\sum_j \beta_{ij}\log\beta_{ij} + \lambda\left(\sum_j \beta_{ij} - 1\right) + \mu\left(\sum_j \beta_{ij} C_{ij} - \langle C \rangle\right).
+\end{equation}
+
+\textbf{First-order condition:}
+
+\begin{equation}
+\frac{\partial \mathcal{J}}{\partial \beta_{ij}} = -\log\beta_{ij} - 1 + \lambda + \mu C_{ij} = 0.
+\end{equation}
+
+\textbf{Solution:}
+
+\begin{equation}
+\log\beta_{ij} = \lambda - 1 + \mu C_{ij}
+\quad \Rightarrow \quad
+\beta_{ij} = K \exp(\mu C_{ij}),
+\end{equation}
+
+where $K = \exp(\lambda - 1)$.
+
+Normalization $\sum_j \beta_{ij} = 1$ gives:
+
+\begin{equation}
+\beta_{ij} = \frac{\exp(\mu C_{ij})}{\sum_k \exp(\mu C_{ik})}.
+\end{equation}
+
+Since we want to \textbackslash emph\{minimize\} expected cost (not maximize), we choose $\mu = -1/\tau < 0$:
+
+\begin{equation}
+\boxed{\beta_{ij} = \frac{\exp(-C_{ij}/\tau)}{\sum_k \exp(-C_{ik}/\tau)} = \operatorname{softmax}_j\left(-\frac{C_{ij}}{\tau}\right)}.
+\end{equation}
+
+\textbf{Interpretation:}
+
+\begin{itemize}
+  \item $\tau \to 0$: Hard attention (argmin over $j$)
+  \item $\tau \to \infty$: Uniform attention (maximum uncertainty)
+  \item Intermediate $\tau$: Soft attention balancing cost minimization and entropy maximization
+\end{itemize}
+
+\textbf{Alternative Derivation (Unconstrained):}\\
+Equivalently, minimize the free energy functional:
+
+\begin{equation}
+F[\beta_i] = \sum_j \beta_{ij} C_{ij} + \tau \sum_j \beta_{ij}\log\beta_{ij},
+\end{equation}
+
+subject only to $\sum_j \beta_{ij} = 1$.
+
+Lagrangian:
+
+\begin{equation}
+\mathcal{J} = \sum_j \beta_{ij} C_{ij} + \tau \sum_j \beta_{ij}\log\beta_{ij} + \lambda\left(\sum_j \beta_{ij} - 1\right).
+\end{equation}
+
+First-order condition:
+
+\begin{equation}
+C_{ij} + \tau(\log\beta_{ij} + 1) + \lambda = 0
+\quad \Rightarrow \quad
+\tau\log\beta_{ij} = -C_{ij} - \tau - \lambda.
+\end{equation}
+
+This immediately gives:
+
+\begin{equation}
+\beta_{ij} = \frac{\exp(-C_{ij}/\tau)}{\sum_k \exp(-C_{ik}/\tau)}.
+\end{equation}
+
+This is the unique maximum-entropy distribution consistent with the constraint $\langle C \rangle = \sum_j \beta_{ij} C_{ij}$.
+
+Hence, each agent assigns weights $\beta_{ij}$ according to their relative consistency where $\tau$ controls the sharpness of selection. In the limit $\tau \rightarrow 0$ the $\beta_{ij}$ weights collapse to hard-attention whereas for large $\tau$ we approach uniform weighting.
+
+Therefore, given agents as local open sections over the base space our complete attention weights (similarly for prior alignments) are given as
+
+$$
+\beta_{ij}(c) =
+\frac{
+  \exp\!\left[
+    -\tfrac{1}{\tau}\,
+    \mathrm{KL}\!\big(
+      q_i(c)
+      \,\big\|\,
+      \Omega_{ij}q_j(c)
+    \big)
+  \right]
+  \, 
+}{
+  \displaystyle
+  \sum_{k}
+  \exp\!\left[
+    -\tfrac{1}{\tau}\,
+    \mathrm{KL}\!\big(
+      q_i(c)
+      \,\big\|\,
+      \Omega_{ik}q_k(c)
+    \big)
+  \right]
+  \, 
+}
+$$
+
+\subsection{Broader Applications: Multi-Agent Information Systems}
+
+\subsubsection{The Generality of the Framework}
+
+The gauge-theoretic active inference framework describes any system where autonomous agents maintain probabilistic beliefs, exchange information through coupling mechanisms, and organize into hierarchical structures through consensus. This characterization applies far beyond transformers and physics, encompassing diverse informational systems across scales and domains. We briefly survey potential applications while emphasizing these remain speculative toy model analogies requiring substantial development before yielding testable predictions.
+
+\subsubsection{Sociological Systems}
+
+Human social organization exhibits clear multi-scale structure with individuals forming groups, groups forming communities, communities forming societies, and so forth~\cite{Coleman1990,Watts1998}. In our framework, individual humans are scale-0 agents maintaining beliefs about social reality and models (priors) encoding expectations about others' behavior. When individuals achieve sufficient belief and model coherence - sharing similar worldviews and behavioral expectations - they form scale-1 meta-agents (social groups).
+
+The participatory feedback loop manifests as bidirectional influence: individuals shape group consensus through bottom-up information flow, while group norms and shared beliefs propagate downward to influence individual expectations~\cite{Giddens1984}. The consensus score $\Gamma(\{i\}, x) = C_{\text{belief}} \cdot C_{\text{model}} \cdot P(\{i\}, x)$ could quantify social cohesion, with high values indicating tightly coordinated communities and low values indicating fragmented or polarized populations.
+
+Gauge frames $\phi_i$ might represent individual "reference frames" for interpreting social information - the cognitive schemas, cultural backgrounds, or ideological positions through which people filter experience~\cite{Goffman1974}. Transport operators $\Omega_{ij}$ would then model perspective-taking: the cognitive work required to understand another person's viewpoint given different interpretive frames~\cite{Mead1934}. Social coordination becomes variational free energy minimization across diverse perspectives, with successful communication requiring either frame alignment (consensus on $\phi_i$) or effective transport (skill at translating between frames).
+
+The model naturally accommodates social phenomena like polarization~\cite{Sunstein2009,Bail2021}, echo chambers (localized high-coherence clusters with minimal external coupling)~\cite{Pariser2011}, and social influence cascades (rapid belief propagation through high-$\beta_{ij}$ networks)~\cite{Watts2007}. However, these remain qualitative analogies. Quantitative validation would require operationalizing abstract concepts (how do we measure belief coherence between humans?), obtaining appropriate data, and demonstrating that the framework provides explanatory or predictive power beyond existing sociological theories.
+
+\subsubsection{Economic Systems}
+
+Markets can be understood as collections of trading agents maintaining beliefs about asset values, with prices emerging from collective information aggregation~\cite{Hayek1945,Grossman1980}. Each trader (agent $i$) maintains beliefs $q_i$ about future prices and model expectations $p_i$ about market dynamics. Attention weights $\beta_{ij}$ represent information channels - traders attend to (are influenced by) other traders whose beliefs are informationally similar~\cite{Shiller2015}.
+
+The framework suggests that efficient markets emerge when agents achieve near-consensus on asset values (low free energy state), while market volatility corresponds to high information flux and disagreement. Market crashes might represent rapid collective transitions between local minima in the free energy landscape - the system suddenly discovers a lower-energy configuration corresponding to radically different price levels~\cite{Sornette2003}.
+
+Firms and other economic organizations exhibit hierarchical structure naturally described by meta-agent formation~\cite{Simon1962,Williamson1975}. Individual workers form teams (scale-1), teams form departments (scale-2), departments form divisions, and so forth. The framework's renormalization group interpretation suggests that information flows differently at different scales: individual decisions operate on fast timescales (belief updates), team strategies on intermediate timescales, and corporate policies on slow timescales (prior evolution).
+
+Economic concepts like information asymmetry~\cite{Akerlof1970,Stiglitz2000}, coordination problems~\cite{Cooper1999}, and principal-agent relationships~\cite{Jensen1976,Holmstrom1979} map naturally onto gauge-theoretic language. Information asymmetry corresponds to large KL divergences between agents' beliefs. Coordination problems arise when the free energy landscape has multiple local minima (agents can reach different equilibria). Principal-agent problems reflect misalignment between top-down priors propagated by principals and bottom-up beliefs of agents, breaking the participatory feedback loop.
+
+\subsubsection{Psychological and Cognitive Systems}
+
+Human cognition itself may constitute a multi-agent system operating at neural, cognitive, and metacognitive scales~\cite{Minsky1986,Dennett1991}. At the neural level, populations of neurons might function as agents maintaining probabilistic representations~\cite{Pouget2013}, with synaptic connectivity implementing information-theoretic coupling. The brain's hierarchical organization - from sensory cortex through associative areas to prefrontal regions - parallels our multi-scale emergence structure~\cite{Felleman1991,Bressler2010}.
+
+At the cognitive level, mental modules or subsystems (perception, memory, reasoning, emotion) might function as semi-autonomous agents~\cite{Fodor1983}. Conscious experience could emerge from high-coherence meta-agents formed when these subsystems achieve informational consensus~\cite{Tononi2004,Dehaene2014}. Cognitive dissonance - the discomfort from holding contradictory beliefs - would correspond to high free energy from large internal KL divergences~\cite{Festinger1957}. Psychological defense mechanisms might represent local free energy minimization strategies that avoid global integration~\cite{Freud1936}.
+
+The framework connects to predictive processing theories in neuroscience~\cite{Friston2010predictive,Clark2013,Hohwy2013}, where brains are understood as hierarchical prediction engines minimizing prediction error. Our free energy functional generalizes this: the self-consistency term $\sum_i \alpha_i \mathrm{KL}(q_i \| p_i)$ implements prediction error minimization (beliefs should match models), while alignment terms implement lateral coherence (different processing streams should agree).
+
+Psychopathology might involve disrupted information geometry~\cite{Friston2014psychopathology,Adams2013}. Conditions like schizophrenia could reflect breakdown of frame alignment (inability to maintain consistent gauge frames across cognitive subsystems), manifesting as thought disorder and reality distortion. Autism might involve atypically weighted coupling terms (different $\beta_{ij}$ structure) affecting social information integration~\cite{Pellicano2012}. Depression could correspond to pathological fixed points in the free energy landscape - local minima that are difficult to escape despite high overall free energy~\cite{Badcock2017}.
+
+\subsubsection{Political Systems and Governance}
+
+Political organization exhibits canonical multi-agent structure~\cite{Ostrom1990,Axelrod1997}. Citizens (scale-0) form political coalitions and parties (scale-1), which organize into governing bodies (scale-2) operating at municipal, regional, and national levels (scale-3). The framework naturally accommodates concepts like representation (meta-agents speak for constituent agents), deliberation (free energy minimization through information exchange)~\cite{Habermas1984,Dryzek2000}, and legitimacy (degree to which top-down priors align with bottom-up beliefs).
+
+Democratic governance implements the participatory feedback loop explicitly: citizens inform policy through voting and advocacy (bottom-up), while policies shape citizen expectations and behavior (top-down)~\cite{Dahl1989}. Authoritarian systems break this loop by preventing bottom-up information flow, relying solely on top-down prior propagation. The framework suggests such systems accumulate high free energy (growing mismatch between leadership priors and citizen beliefs) that can lead to sudden regime transitions when the system escapes local minima~\cite{Kuran1991}.
+
+Political polarization corresponds to the formation of disjoint meta-agents with minimal information coupling~\cite{Bishop2009,Mason2018} - large segments of the population form high-coherence internal clusters but exhibit negligible $\beta_{ij}$ weights between clusters. This creates a fragmented free energy landscape where different groups converge to incompatible local equilibria. Successful political coordination requires either increasing cross-cluster coupling (building bridges, fostering dialogue) or achieving frame alignment (establishing shared interpretive frameworks).
+
+Ideological systems might function as shared gauge frames~\cite{Converse1964,Lakoff2002} - Republicans and Democrats don't just disagree on specific policies but interpret political information through systematically different reference frames. Transport operators $\Omega_{ij}$ then represent the difficulty of cross-ideological communication. High transport costs (large frame misalignment) make political compromise energetically expensive, potentially explaining gridlock in polarized systems.
+
+\subsubsection{Biological and Ecological Systems}
+
+Living systems exhibit hierarchical multi-agent structure across extraordinary scale ranges~\cite{Simon1973,Levin1992}. Genes coordinate through regulatory networks~\cite{Barabasi2004,Alon2007}, proteins form molecular machines, organelles organize into cells, cells form tissues and organs, organs comprise organisms, organisms form populations and species, and species constitute ecosystems~\cite{West2006}. Each level might operate through gauge-theoretic information dynamics.
+
+At the cellular level, intracellular signaling pathways exchange information about environmental conditions, nutrient availability, and stress~\cite{Barkai2007,Csete2002}. Gene regulatory networks coordinate transcription through information-theoretic coupling, with transcription factors functioning as attention mechanisms directing cellular resources. Multicellular organisms emerge when cells achieve sufficient coordination (developmental programs enforce belief coherence)~\cite{Wolpert2002}, with different cell types representing specialized frames adapted to different local contexts.
+
+At the organismal level, neural systems implement explicit multi-agent information processing as discussed in the cognitive section. At the population level, evolutionary dynamics might be understood through our framework. Organisms maintain implicit "beliefs" encoded in phenotypes and "models" encoded in genotypes. Natural selection implements free energy minimization: populations evolve toward configurations that minimize prediction error between organismal expectations (adaptations) and environmental realities~\cite{Campbell2016}.
+
+Ecological systems comprise populations interacting through predator-prey relationships, competition, symbiosis, and other couplings~\cite{May1973,Levin1998}. The framework suggests ecosystem stability emerges from achieving low collective free energy - species evolve complementary niches that minimize ecological "disagreement." Mass extinctions correspond to rapid transitions between free energy minima triggered by environmental perturbations~\cite{Scheffer2001}, analogous to market crashes or political revolutions in other domains.
+
+\subsubsection{General Principles and Limitations}
+
+Across these diverse domains, several common patterns emerge. Systems exhibit hierarchical organization with agents at scale $s$ forming meta-agents at scale $s+1$ through information coordination. Bidirectional information flow creates participatory feedback loops where microscopic and macroscopic levels mutually influence each other. Frame alignment (shared reference systems) facilitates coordination while frame diversity enables exploration of solution spaces. Systems far from equilibrium exhibit richer dynamics and greater adaptive capacity than equilibrated systems.
+
+However, these applications remain highly speculative. The framework provides qualitative analogies and suggestive interpretations but has not been validated quantitatively in any domain beyond transformers and simple active inference simulations. Real systems include domain-specific complexities, constraints, and mechanisms not captured by the abstract mathematical structure. The framework makes no specific quantitative predictions about social cohesion metrics, market dynamics, psychological phenomena, or ecological stability without substantial additional development.
+
+The value of these connections lies not in claiming the framework explains these systems but in suggesting a common mathematical language that might enable cross-domain insights. Tools developed for understanding transformers might inform sociological modeling; concepts from economics might clarify neural computation; political science might benefit from gauge-theoretic formalism. Whether such transfer proves fruitful remains an empirical question requiring sustained interdisciplinary effort.
+
+Most importantly, the framework is a toy model - it captures some essential structural features of multi-agent information systems while omitting vast amounts of domain-specific detail. It should be viewed as one lens among many for understanding complex systems, potentially useful for highlighting certain patterns but certainly not a complete theory of sociological, economic, psychological, political, or biological phenomena. Extraordinary caution is warranted before claiming any explanatory or predictive power in these domains beyond the suggestive analogies presented here.
+
+
+
+
+
+
+
+\subsubsection{Critical Open Problems}
+
+Several fundamental problems remain unsolved and may prove intractable. The Lorentzian signature problem - how Riemannian Fisher-Rao geometry produces the $(-,+,+,+)$ signature of physical spacetime - has no satisfactory resolution. We have postulated signature assignment but not derived it from information-theoretic principles. This gap prevents the framework from genuinely explaining relativistic spacetime rather than merely relabeling it.
+
+Dimensional analysis relating information-theoretic quantities to physical units remains unresolved. Without rigorous conversion factors between bits and kilograms or nats and seconds, claims about mass as Fisher information remain metaphorical. Quantitative predictions for physical constants (speed of light, Planck's constant, particle masses) are absent. The framework produces structural analogies without numerical predictions.
+
+Matter fields and fundamental interactions lack representation. We have geometric background but no particles, no gauge bosons mediating forces, no mechanism for electromagnetic, weak, or strong interactions. A complete physical theory requires matter content and dynamics we have not provided. Whether these can emerge from information geometry or must be added as additional structure remains unknown.
+
+The framework may be compatible with any possible physics by construction, raising concerns about falsifiability and explanatory power. If every observation can be interpreted through appropriate gauge choices and pullback constructions, the framework becomes vacuous - mathematically sophisticated but empirically empty. Distinguishing genuine explanatory power from elaborate relabeling remains a critical challenge.
+
+\subsubsection{Future Research Directions}
+
+Productive research directions include attempting to derive dimensionless physical constants (fine structure constant, mass ratios, coupling constant ratios) from information-geometric first principles. Success would strongly support the phenomenological interpretation and demonstrate genuine explanatory power beyond structural analogies. Exploring whether Lorentzian signature can emerge from gauge structure, holonomy effects, or other information-geometric phenomena could resolve the most critical theoretical gap.
+
+Developing rigorous dimensional analysis connecting information theory and physics would transform the framework from qualitative analogy to quantitative theory. Investigating whether matter fields and interactions emerge as excitations, topological features, or defects in information geometry could provide the missing physical content. Extending the transformer validation to hierarchical architectures, spatial reasoning tasks, and larger scales would demonstrate broader applicability.
+
+In neuroscience, detailed testing of consciousness predictions using advanced measurement techniques could validate or refute the hierarchical integration model. Systematic study of information-geometric properties during altered states could illuminate relationships between gauge structure and phenomenology. Cross-cultural and cross-species studies could probe whether gauge invariance requirements truly reflect human-universal cognitive constraints or culturally contingent conventions.
+
+Philosophically, developing clearer criteria distinguishing testable predictions from untestable interpretations would enhance intellectual honesty and scientific rigor. Engaging seriously with critiques from physics, neuroscience, and philosophy communities would identify fatal flaws or strengthen foundations. Exploring connections to other foundational approaches (quantum information theory, constructor theory, causal set theory) might reveal complementarity or incompatibility.
+
+\subsubsection{Concluding Remarks}
+
+This gauge-theoretic active inference framework represents an ambitious attempt to ground fundamental physics, consciousness, and scientific knowledge in information-geometric principles. Wheeler's "it from bit" vision finds mathematical realization through pullback mechanisms inducing geometric structure from belief dynamics. The participatory universe emerges through hierarchical meta-agent formation and bidirectional information flow.
+
+The framework succeeds in unifying transformer architectures with gauge theory, demonstrating that practical machine learning can be understood through sophisticated mathematical physics. It provides novel perspectives on perennial philosophical problems, reframing questions about consciousness, scientific progress, and physical reality. It generates testable predictions in machine learning and neuroscience while offering interpretive schemas for understanding phenomena from language to cosmology.
+
+However, severe limitations must be acknowledged. Many claims remain speculative without clear paths to empirical validation. Fundamental theoretical problems persist without obvious solutions. The framework may function more as philosophical interpretation than scientific theory in crucial domains. It provides new language and mathematical tools without necessarily yielding genuine explanations beyond relabeling familiar phenomena.
+
+Whether this constitutes progress toward understanding reality's ultimate nature or merely sophisticated reformulation of existing mysteries remains unclear. The framework's value may lie not in final answers but in precise formulation of deep questions and mathematical tools for exploring them. Like Wheeler's own work, it pushes boundaries of what mathematical physics can encompass while acknowledging fundamental uncertainties at the foundations of knowledge.
+
+If reality is indeed "participatory" in Wheeler's sense - with observers not merely measuring but partly constituting physical structure through information processing architecture - then frameworks like ours that take information geometry seriously may prove essential for progress. If instead physical reality exists independently of observation, with information merely describing pre-existing substance, then information-geometric approaches may illuminate aspects of knowledge and perception while missing reality's true nature. We suspect the truth lies somewhere between these extremes, with both information and substance playing essential but not yet fully understood roles. Our framework provides mathematical structure for continuing to explore these foundational questions with greater precision than informal philosophical speculation permits.
+
+\subsubsection{The Ontology-Epistemology Duality and Its Collapse}
+
+Traditional philosophy maintains a sharp distinction between ontology (what exists) and epistemology (how we know what exists). Ontology concerns the fundamental nature of reality - what entities, properties, and structures exist independently of observers. Epistemology concerns the nature, sources, and limits of knowledge - how observers access, represent, and justify beliefs about reality. Most philosophical positions treat these as separate inquiries: realism holds that ontological reality exists independently while epistemology studies our necessarily imperfect access to it; idealism reduces ontology to epistemology by claiming only minds and ideas exist; Kant's critical philosophy posits unknowable noumena (ontology) accessible only through phenomenal appearances structured by cognitive faculties (epistemology).
+
+Our framework suggests a radical unification that dissolves this traditional duality. The noumenal manifold $\mathcal{C}$ exists ontologically but possesses no intrinsic structure, properties, or content - it is pure substrate. All structure emerges epistemically through agent beliefs $q_i(c)$, gauge frames $\phi_i(c)$, and pullback operations $G_i = \sigma_i^* g_{\mathcal{B}}$ that induce phenomenal geometry. What we call "physical reality" - spacetime, particles, fields, causal relations - is neither purely ontological (existing independently) nor purely epistemological (merely subjective representation) but rather the structure that emerges at the interface between a substrate lacking content and information-processing agents.
+
+In this view, ontology and epistemology represent complementary perspectives on a unified information-geometric structure rather than separate domains. The ontological question "what exists?" and the epistemological question "how do we know?" collapse into the single question "what information-geometric structure emerges from agent-substrate coupling?" Physical reality is simultaneously what exists (ontologically) and how it is known (epistemologically) because existence-for-agents just is being-represented-through-gauge-frames. There is no meaningful distinction between the structure of reality and the structure of our knowledge of reality because structure itself is neither purely external nor purely internal but emerges from their interaction.
+
+This position resembles yet differs from several philosophical traditions. It shares with Wheeler's participatory universe~\cite{Wheeler1990} and quantum information interpretations~\cite{Zeilinger1999,Fuchs2013} the view that reality is co-constituted by observers and observed. It aligns with structural realism~\cite{Ladyman2007,Worrall1989} in holding that only relational structure exists rather than intrinsic substance. It echoes pragmatist themes~\cite{James1907,Dewey1938} about truth emerging from inquiry rather than correspondence to independent reality. It resonates with phenomenological traditions~\cite{Husserl1913,Heidegger1927} emphasizing that being is always being-for-consciousness.
+
+However, our framework provides mathematical precision these philosophical positions typically lack. We specify exactly how ontological substrate and epistemic access relate through fiber bundles, pullback operations, and gauge transformations. The framework is not merely metaphorical but constitutes a working mathematical theory with computational implementations. This precision enables concrete predictions and empirical tests rather than purely speculative philosophy.
+
+Nevertheless, significant limitations and debates arise. Critics might object that we have merely relocated the ontology-epistemology distinction to a new level: the noumenal substrate $\mathcal{C}$ remains purely ontological (existing independently) while all epistemic structure lives in the fibers and pullbacks. We might respond that $\mathcal{C}$ without induced structure is so thin ontologically as to be effectively nothing - existence without any properties, structure, or content. But this response risks collapsing into idealism, where nothing exists except epistemic structure.
+
+Alternatively, one might argue the framework simply confuses metaphysics and methodology. That we can only access reality through epistemic means (beliefs, measurements, representations) does not imply reality IS epistemic structure. This conflates epistemological necessity with metaphysical constitution. The framework might describe how we model reality without addressing what reality is independently of modeling. This objection has force and returns us to traditional realism-antirealism debates.
+
+Perhaps the most defensible position is epistemological rather than metaphysical. The framework demonstrates that we can construct a consistent, empirically adequate, mathematically rigorous theory treating epistemic structure as fundamental without requiring independent ontological substance. Whether this reflects the ultimate nature of reality or merely our inescapable epistemic situation remains undecidable. The framework shows the ontology-epistemology distinction CAN be dissolved in a coherent mathematical structure, not that it MUST be dissolved in reality itself.
+
+This unification, if accepted, has profound implications. Traditional debates about realism versus antirealism, scientific objectivity versus relativism, mind-independent reality versus constructed phenomena all require reframing. Rather than asking whether scientific theories correspond to external reality, we ask whether they achieve optimal collective free energy minimization. Rather than seeking observer-independent truth, we recognize that truth is necessarily observer-dependent while remaining objectively structured through gauge-covariance constraints. Rather than separating epistemology (how we know) from ontology (what exists), we investigate the information-geometric dynamics through which knowing and being co-emerge.
+
+Whether this represents genuine philosophical progress or sophisticated confusion remains debatable. But it offers a mathematically precise framework for exploring these ancient questions with new tools, potentially enabling progress where informal philosophy has stalled. At minimum, it demonstrates that the ontology-epistemology duality is not logically necessary but represents one possible way of organizing inquiry that may be transcended through information-geometric thinking.
+
+
+\subsubsection{Mathematical Constructivism and Social Construction of Reality}
+
+The framework exhibits deep affinities with constructivist philosophy while transcending traditional constructivist-realist debates through mathematical precision. Constructivism in various forms holds that reality, knowledge, or particular aspects of experience are actively constructed rather than passively discovered. Social constructivism argues that social realities emerge through collective human activity and agreement. Radical constructivism claims that cognitive systems construct their experiential worlds rather than discovering external truth. Mathematical constructivism holds that mathematical objects are mental constructions requiring explicit algorithmic specification rather than discovered abstract entities.
+
+Our framework provides a rigorous mathematical realization of constructivist intuitions. Physical reality is not discovered but constructed through agent beliefs $q_i(c)$, gauge frames $\phi_i(c)$, and pullback operations $G_i = \sigma_i^* g_{\mathcal{B}}$ that induce geometric structure. Different agents literally construct different phenomenal realities from the same noumenal substrate. What we experience as objective physical space - with its metric structure, causal relations, and conservation laws - emerges from the information-geometric dynamics of belief formation and inter-agent coordination rather than being discovered as pre-existing structure.
+
+The free energy functional drives agents toward consensus through model alignment terms $\sum_{ij} \gamma_{ij} \mathrm{KL}(p_i \| \tilde{\Omega}_{ij}[p_j])$. Scientific reality is socially constructed in a precise mathematical sense: it represents the collective minimum of free energy achieved when human agents with diverse gauge frames converge on shared models satisfying gauge-covariance constraints. Physics textbooks describe not mind-independent reality but the consensus phenomenology that human cognitive architecture produces through coordinated information processing.
+
+This aligns with science studies emphasizing social construction of scientific knowledge~\cite{Latour1979,Pickering1984}. Laboratory practices, inscription devices, social networks, and rhetorical strategies shape what counts as scientific fact. Our framework provides mathematical structure for these sociological observations: scientific facts are fixed points of collective free energy minimization under constraints imposed by both empirical observations and human cognitive architecture. The distinction between "social" and "natural" science collapses - all science is social construction, but this construction is highly constrained by information-geometric dynamics.
+
+However, the framework differs from naive social constructivism in crucial respects. The noumenal manifold $\mathcal{C}$ exists independently of agents - it provides the substrate upon which information geometry operates. We are not radical idealists claiming nothing exists beyond consciousness. Rather, something exists (the substrate) but possesses no intrinsic structure, properties, or determinate nature independent of observation. This is construction on a foundation rather than construction from nothing.
+
+Moreover, construction is mathematically constrained. Agents cannot construct arbitrary realities - they are bounded by information-geometric principles (minimizing KL divergence, respecting gauge covariance, maintaining internal consistency). The freedom in construction is real but limited. Different agents pull back different metrics, but these metrics must satisfy rigorous mathematical relations through transport operators. Social construction of scientific knowledge is genuine but operates within non-negotiable information-theoretic constraints.
+
+This position resembles Kant's transcendental idealism more than modern social constructivism~\cite{Kant1781}. Kant argued that space, time, and causality are contributed by the mind (constructed) rather than discovered in things-in-themselves, yet these forms of intuition are universal and necessary for all human experience. Similarly, our framework holds that geometric structure is constructed through agent information processing, yet this construction follows universal information-geometric principles rather than arbitrary social convention. The construction is objective (intersubjectively valid, mathematically constrained) while being genuinely constructive (not discovered).
+
+The framework also connects to constructive mathematics, where mathematical objects require explicit algorithmic specification. In our case, physical reality is constructed through computational processes (natural gradient descent, free energy minimization) operating on statistical manifolds. Reality is, quite literally, computed through distributed information processing. This computational constructivism grounds both mathematical constructivism (mathematical objects emerge from information dynamics) and social constructivism (scientific knowledge emerges from collective computation).
+
+Critical tensions remain between the framework's constructivism and scientific practice. Scientists experience themselves as discovering objective facts about external reality, not constructing conventional descriptions. The periodic table, DNA structure, gravitational waves - these seem discovered rather than invented. How do we reconcile phenomenological realism (scientists' experience of discovery) with metaphysical constructivism (reality as constructed)?
+
+The framework suggests that discovery and construction are not opposites but complementary descriptions. From within a gauge frame, structure appears discovered - the induced metric $G_i$ seems to reveal pre-existing spatial geometry. From outside any particular gauge frame (a perspective we cannot actually occupy), we recognize structure as constructed through pullback operations. Scientists genuinely discover within phenomenal reality while unknowingly constructing that reality through their information-processing activities. Discovery is real but occurs within constructed phenomenological space.
+
+Another tension concerns empirical constraint. If reality is constructed, why can't we construct it differently? Why do experiments yield consistent results across different observers, laboratories, and historical periods? The answer involves multiple constraint sources. The noumenal substrate $\mathcal{C}$, while structureless, constrains which constructions are viable - not all pullbacks yield stable phenomenologies. Human cognitive architecture constrains available gauge frames - we cannot adopt arbitrary internal reference systems. Shared evolutionary history and cultural transmission align human gauge frames, producing consensus phenomenologies. Empirical observations provide hard constraints - models failing to predict observations accumulate high free energy and are abandoned.
+
+The result is construction that feels and functions like discovery. Human agents collectively construct a highly constrained, relatively stable, intersubjectively validated phenomenal reality we experience as discovered objective truth. The construction is not arbitrary but determined by information-geometric principles, cognitive architecture, and empirical constraint. Yet it remains construction - different intelligences with different cognitive architectures might construct incompatible but equally valid phenomenologies from the same substrate.
+
+This synthesizes realist and constructivist intuitions while transcending their traditional opposition. Against naive realism, the framework shows that structure is agent-dependent and gauge-frame-relative rather than intrinsic to mind-independent reality. Against naive constructivism, it demonstrates that construction is highly constrained by both mathematical principles and empirical observation, yielding objective intersubjective agreement. Reality is neither simply found nor simply made but emerges through the mathematically constrained interaction between agents and substrate.
+
+Whether this constitutes genuine philosophical progress or merely sophisticated ambiguity remains debatable. Critics might argue we've simply redefined "construction" so broadly that it loses distinctive content - if construction is constrained by non-arbitrary principles and yields objective consensus, what distinguishes it from discovery? We might respond that the crucial distinction lies in recognizing structure as agent-dependent rather than intrinsic, phenomenal rather than noumenal. But this response may not satisfy those seeking sharper metaphysical commitments.
+
+Perhaps the framework's value lies not in resolving realism-constructivism debates but in providing mathematical tools for investigating them with precision. Rather than arguing philosophically whether reality is discovered or constructed, we can model both perspectives information-geometrically and investigate their formal relationships. This moves philosophy from purely conceptual analysis toward mathematically structured inquiry, potentially enabling progress where informal debate has reached impasse.
+
+The framework thus offers a form of mathematical constructivism that takes seriously both the reality of the noumenal substrate and the constructive role of agent information processing. It provides formal structure for understanding how objective, intersubjectively valid, empirically constrained knowledge can nonetheless be fundamentally constructed rather than discovered. Whether nature itself is constructive or merely our knowledge of it remains an open question, but the framework demonstrates that coherent constructivist metaphysics is mathematically and empirically viable.
+
+\subsubsection{Structural Parallels with Quantum Bayesianism}
+
+The framework exhibits striking structural parallels with Quantum Bayesianism (QBism)~\cite{Fuchs2013,Fuchs2017,Caves2002}, a participatory interpretation of quantum mechanics, though we have not attempted to derive quantum theory itself. QBism holds that quantum states represent an agent's personal degrees of belief about future measurement outcomes rather than objective descriptions of physical systems. Wave functions are tools individual agents use to organize their expectations, not elements of external reality. Measurement updates beliefs rather than revealing pre-existing values.
+
+Our framework shares QBism's core commitments while operating in a classical information-geometric setting. In our framework, beliefs $q_i(c)$ are agent-dependent probability distributions over a base manifold, not objective descriptions of $\mathcal{C}$ itself - precisely analogous to QBist quantum states being subjective rather than ontic. Different agents maintain different beliefs about the same noumenal substrate, just as different QBist agents assign different quantum states to the same physical system based on their information and perspective.
+
+Gauge frames $\phi_i(c)$ in our framework play a role structurally similar to measurement contexts or basis choices in quantum mechanics. Just as quantum measurements depend on chosen observables (position vs. momentum, spin-x vs. spin-z), our agents' phenomenal geometries depend on their gauge frames. The transport operators $\Omega_{ij}$ enabling comparison across different gauge frames parallel the unitary transformations relating different quantum measurement bases. Both frameworks emphasize that there is no privileged "correct" frame - only transformations relating different perspectives.
+
+The observer-dependent reality emerging from our pullback construction aligns with QBism's participatory realism~\cite{Fuchs2017participatory}. QBists reject the notion that quantum mechanics describes a pre-existing external world independent of agents. Similarly, we argue that geometric structure (spacetime, causality) emerges from agent information processing rather than existing as intrinsic features of the noumenal substrate. Both frameworks embrace Wheeler's participatory universe~\cite{Wheeler1990} where observers partly constitute reality through their interactions and measurements.
+
+The absence of a "view from nowhere" is central to both approaches. QBism denies there exists a God's-eye quantum state describing the universe objectively. Every quantum state is someone's state - an agent's personal probability assignment. Our framework makes parallel claims: every induced metric $G_i$ is some agent's phenomenal geometry. There exists no agent-independent geometry, only the unknowable noumenal substrate upon which agents construct phenomenal structure through gauge-frame-dependent pullbacks.
+
+However, critical differences and limitations must be acknowledged. We have not derived quantum mechanics from our framework. The framework operates with classical probability distributions (Gaussians on statistical manifolds) rather than quantum amplitudes in Hilbert spaces. We lack complex-valued wave functions, Born rule probability assignments, superposition principles, or entanglement phenomena. While our gauge groups (SO(3), SO(N)) provide rotational structure, quantum mechanics requires U(1) phases for interference and unitary evolution.
+
+The measurement problem - why measurements produce definite outcomes from quantum superpositions - is not addressed because we have no quantum superpositions. Our agents update beliefs through Bayesian conditioning and free energy minimization, which are classical stochastic processes without quantum mechanical features. We cannot explain quantum indeterminacy, complementarity, or contextuality within the current framework.
+
+Moreover, QBism is explicitly about quantum mechanics - it's an interpretation of existing quantum formalism. Our framework is more general, potentially applying to any multi-agent information system. Whether quantum mechanics emerges as a special case remains unknown. One might speculate that complex-valued beliefs or U(1) gauge structure could introduce quantum features, but this is purely conjectural without detailed development.
+
+Despite these limitations, the structural parallels suggest productive research directions. Perhaps our framework could be extended to quantum settings by:
+
+1. **Complexification**: Replace real Gaussian distributions with complex probability amplitudes, introducing phases and interference
+2. **U(1) gauge group**: Use electromagnetic gauge group rather than SO(3), naturally introducing quantum phases
+3. **Non-commutative fiber geometry**: Allow statistical manifolds with non-commutative structure, capturing quantum incompatibility
+4. **Entangled sections**: Develop tensor product bundle structures where agent beliefs become quantum-entangled
+5. **Decoherence from consensus**: Model wave function collapse as emergent from inter-agent information exchange driving toward classical consensus
+
+These extensions are speculative but mathematically plausible. If successful, they would provide an information-geometric foundation for quantum mechanics complementary to existing approaches like quantum information theory~\cite{Nielsen2000}, quantum Bayesianism~\cite{Fuchs2017}, and relational quantum mechanics~\cite{Rovelli1996}.
+
+The philosophical alignment with QBism is perhaps more significant than technical details. Both frameworks reject naive realism about their respective formalisms (quantum states, geometric structures). Both emphasize agent-dependence and participatory construction of phenomenal reality. Both embrace observer plurality - different agents have different but equally valid perspectives related by transformations (unitary operations, gauge transformations). Both deny access to agent-independent truth, allowing only intersubjective agreement constrained by empirical observation and mathematical consistency.
+
+This philosophical kinship suggests our framework and QBism may be different manifestations of deeper principles about information, observation, and reality. If quantum mechanics is fundamentally about information - an increasingly common view in quantum foundations - then information-geometric frameworks like ours provide natural mathematical language for exploring quantum phenomena. Whether the connection proves substantive or merely analogical requires future work, but the parallels warrant investigation.
+
+For Foundations of Physics readers familiar with quantum interpretations, we emphasize: our framework is not quantum mechanical, makes no claims about deriving or explaining quantum phenomena, and operates entirely in classical probability theory. The parallels with QBism are structural and philosophical rather than technical. We view this as suggestive rather than conclusive - it indicates potentially fruitful directions for extending information-geometric approaches toward quantum settings while acknowledging we have not yet traveled that path.
+
+
+% Bibliography
+\bibliographystyle{apsrev4-2}
+\bibliography{references}
+
+
+\end{document}

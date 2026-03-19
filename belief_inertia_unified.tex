@@ -1,0 +1,2288 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{geometry}
+\usepackage[round]{natbib}
+\usepackage{graphicx}
+\usepackage{float}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tcolorbox}
+\usepackage{enumitem}
+ \usepackage{subcaption} 
+\geometry{margin=1in}
+\newcommand{\KL}{\mathrm{KL}}
+\newcommand{\tr}{\mathrm{tr}}
+\newcommand{\Sig}{\Sigma}
+\newcommand{\SigQ}{\Sigma^q}
+\newcommand{\SigP}{\Sigma^p}
+\newcommand{\muQ}{\mu^q}
+\newcommand{\muP}{\mu^p}
+\newcommand{\Dmu}{\Delta\mu}
+\newcommand{\vech}{\mathrm{vech}}
+\newcommand{\Prec}{P}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{definition}[theorem]{Definition}
+\newtheorem{prediction}[theorem]{Prediction}
+
+\title{The Inertia of Belief}
+
+\author{
+Robert C. Dennis\\
+\texttt{cdenn016@gmail.com}
+}
+
+\date{\today}
+
+\begin{document}
+\maketitle
+
+
+
+\begin{abstract}
+We present a unified geometric framework from which several foundational 
+sociological models emerge as limiting cases: DeGroot social learning, 
+Friedkin-Johnsen opinion dynamics, bounded confidence models, echo chamber 
+formation, and Social Impact Theory all arise from variational free energy 
+minimization on statistical manifolds under appropriate parameter regimes. 
+This unification reveals that consensus, polarization, and bounded confidence 
+are not separate phenomena requiring distinct theories but manifestations of 
+a single information-geometric principle operating under different boundary 
+conditions.
+
+The framework's deeper structure explains why phenomenological mass/spring 
+models of belief dynamics have proven empirically successful: the Fisher 
+information metric, the unique Riemannian metric on probability spaces, 
+naturally suggests an inertial mass tensor. Confident beliefs resist
+change while uncertain beliefs update readily---not by analogy to physics but
+as a consequence of information geometry. We adopt a Hamiltonian ansatz treating 
+precision as epistemic inertia, which reduces to standard Bayesian free energy 
+descent in the overdamped limit while predicting oscillation, overshooting, and 
+resonance in underdamped regimes consistent with attitude change research. The 
+framework reframes confirmation bias and belief perseverance as geometric 
+consequences of epistemic inertia rather than irrationality.
+\end{abstract}
+
+
+
+\noindent\textbf{Keywords:} Gauge theory $\cdot$ Active inference $\cdot$ Free energy principle $\cdot$ Information geometry $\cdot$ Sociology
+
+\section{Introduction}
+
+Why do some beliefs resist change more than others? Why does influence itself seem to harden the minds and poison the empathies of those who wield it? Some beliefs are stiff while others readily sway. While confident beliefs clearly possess more "cognitive inertia" than uncertain ones, a principled mathematical foundation for this intuitive phenomenon remains elusive. Current theories of belief updating, from Bayesian inference \citet{jaynes2003probability} to predictive coding \citep{Friston2010,clark2013whatever}, model belief change as gradient descent. This is a purely dissipative process where beliefs flow toward lower free energy without momentum, inertia, or dynamics. Though enormously successful across neuroscience \citep{friston2016active}, psychology \citep{hohwy2013predictive}, and machine learning \citep{millidge2021predictive}, this framework does not account for inertial or oscillatory dynamics.
+
+In this article, we show that beliefs possess an epistemic inertia proportional to an agent's prior precision, observational precision, and their social interactions. Just as physical objects with mass resist acceleration, beliefs held with high confidence resist change and, once moving, tend to continue in their direction on a statistical manifold of beliefs. The second-order expansion of the variational free energy reveals that the Fisher information metric \citep{Amari2016} suggests an ansatz for an inertial mass tensor for belief dynamics. The Hamiltonian structure we adopt treats these second-order terms, traditionally neglected \citep{friston2008hierarchical,bogacz2017tutorial}, as generating momentum with sociological and psychological consequences.
+
+Furthermore, beliefs propagate through networks of agents in attention patterns ranging from coordinated consensus to turbulent disagreement, often exhibiting distortion, resonance, and phase transitions \citep{castellano2009statistical,galam2012sociophysics}. While numerous models capture aspects of this collective evolution, from opinion dynamics \citep{hegselmann2002opinion} to quantum-inspired approaches \citep{busemeyer2012quantum}, a principled geometric foundation has been lacking.
+
+As an intuitive example, consider an agent with strong priors about a political position. When presented with contradicting evidence, their belief doesn't immediately flip but resists change, may overshoot when it does shift, and might oscillate before settling. Conversely, an uncertain agent responds quickly to new evidence with minimal resistance. These phenomena, typically attributed to cognitive biases \citep{kahneman2011thinking}, emerge naturally from belief inertia.
+
+This article provides three primary contributions. First, we propose second-order belief dynamics motivated by the variational free energy, showing that the Hessian of the free energy provides a natural candidate for an inertial mass tensor $M = \Lambda_{\text{prior}} + \Lambda_{\text{observation}} + \Lambda_{\text{social}}^{\text{in}} + \Lambda_{\text{social}}^{\text{out}}$ combining prior conviction, sensory data, and social interactions (both incoming influence and outgoing recoil). Via pullback geometry on statistical manifolds \citep{Amari2016,nielsen2020elementary}, we extend the variational free energy to multi-agent systems where social coupling takes the form $D_{\mathrm{KL}}(q_i \| \Omega_{ij} \cdot q_j)$, penalizing disagreement with neighbors after gauge transport into a common reference frame.
+
+Second, we demonstrate that several foundational models from sociology and opinion dynamics emerge as limiting cases of our unified framework. DeGroot social learning \citep{degroot1974}, Friedkin-Johnsen opinion dynamics \citep{friedkin1990}, bounded confidence models \citep{hegselmann2002opinion,deffuant2000}, echo chamber formation, and Social Impact Theory \citep{latane1981psychology} all arise from appropriate parameter regimes and approximations of the same variational free energy functional. This unification reveals that phenomena previously requiring separate theoretical apparatuses---consensus formation, polarization, and bounded confidence---are manifestations of a single geometric principle operating under different boundary conditions.
+
+Third, we unify documented but theoretically distinct psychological phenomena---attitude oscillation in persuasion \citep{kaplowitz1992,fink2002}, perceptual overshoot \citep{burge2010,webster2015}, and momentum in expectations \citep{coibion2015}---as well as cognitive biases such as confirmation bias \citep{nickerson1998confirmation} and belief perseverance \citep{anderson1980perseverance}, as natural consequences of epistemic inertia operating in different parameter regimes. These effects, absent in first-order dissipative treatments \citep{parr2022active}, emerge from second-order dynamics and yield testable predictions (precision-scaled relaxation times, resonance frequencies, and stopping distances) that distinguish our framework from purely dissipative models.
+
+Our approach thereby opens mathematical tools traditionally confined to physics---symplectic geometry \citep{arnold1989mathematical}, perturbation theory \citep{holmes2012introduction}, Noether's theorem \citep{olver1993applications}, renormalization group methods \citep{wilson1975renormalization,goldenfeld1992lectures}, and critical point analyses \citep{strogatz2015nonlinear,sornette2006critical}---for understanding cognitive and social dynamics. By recognizing beliefs as dynamical and inertial quantities, we bridge information geometry, cognitive science, and collective behavior within a unified Hamiltonian framework.
+
+The remainder of this article is organized as follows. Section~2 develops the mathematical framework: beliefs as points on statistical manifolds, multi-agent gauge geometry, the variational free energy, proper time, and the Hamiltonian formulation with the complete mass derivation. Section~3 presents results on cognitive phenomena (overshoot, oscillation, resonance, perseverance, multi-agent momentum transfer) together with computational validation. Section~4 derives classical sociological models as limiting cases. Section~5 discusses implications, experimental tests, and limitations. Detailed derivations appear in the appendices.
+
+
+\section{Mathematical Framework}
+
+\subsection{Beliefs as Points on Statistical Manifolds}
+
+We model beliefs as probability distributions $q(\xi)$ parameterized by $\xi \in \mathbb{R}^n$ on a statistical manifold $\mathcal{B}$. 
+
+For the remainder of this article we shall consider multi-variate Gaussian (MVG) beliefs and priors for convenience.
+
+
+\begin{align}
+q &= \mathcal{N}(\mu_q, \Sigma_q) \\
+p &= \mathcal{N}(\mu_p, \Sigma_p)
+\end{align}
+
+where $\mu_\nu$ represents the mean value and $\Sigma_\nu$ represents uncertainty.
+
+The Kullback-Leibler (KL) divergence measures the distance between an agent's belief $q$ and their prior model $p$
+
+\begin{equation}
+D_{\mathrm{KL}}(q \| p) = \int q(x) \log \frac{q(x)}{p(x)} dx
+\end{equation}
+
+
+
+\subsection{Multi-Agent Belief Geometry}
+
+We extend our single-agent framework to networks of interacting cognitive agents via attention. The geometric setting is a principal $G$-bundle $\pi: P \to \mathcal{C}$ where the base manifold $\mathcal{C}$ encodes agent positions and social network topology, and the gauge group $G$ acts on belief space (see Appendix~\ref{app:gauge} for the complete geometric treatment). Each agent $i$ maintains beliefs $q_i = \mathcal{N}(\mu_i, \Sigma_i)$ anchored to a prior $p_i = \mathcal{N}(\bar{\mu}_i, \bar{\Sigma}_i)$, along with an internal reference frame $\phi_i$ that determines how they encode information.
+
+To compare beliefs across agents, we introduce parallel transport operators as
+
+\begin{equation}
+\Omega_{ij} = e^{\phi_i}e^{-\phi_j} \in G
+\end{equation}
+
+where $\phi_i, \phi_j \in \mathfrak{g}$, the Lie algebra of $G$.
+
+This operator transforms agent $j$'s beliefs into agent $i$'s reference frame as
+
+\begin{equation}
+q_j \to \Omega_{ij} \cdot q_j = \mathcal{N}(\Omega_{ij}\mu_j, \Omega_{ij}\Sigma_j\Omega_{ij}^T)
+\end{equation}
+
+The transformed belief can then be compared with agent $i$'s own beliefs via KL divergence:
+
+\begin{equation}
+D_{ij} = D_{\mathrm{KL}}(q_i \| \Omega_{ij} \cdot q_j)
+\end{equation}
+
+The natural gauge group for KL-based belief coupling is $G = \mathrm{GL}(d)$, the general linear group of invertible $d \times d$ matrices \citep{Dennis2025}. This is because KL divergence between Gaussians is invariant under any invertible linear transformation of the sufficient statistics: for any $\Omega \in \mathrm{GL}(d)$, we have $D_{\mathrm{KL}}(\Omega \cdot q \| \Omega \cdot p) = D_{\mathrm{KL}}(q \| p)$. The only requirement is invertibility ($\det \Omega \neq 0$), not orthogonality. Since our transport operators are parameterized via the matrix exponential, $\det(\exp(\phi)) = \exp(\mathrm{tr}(\phi)) > 0$, so their determinants are always positive. Important subgroups include $\mathrm{SO}(d)$ (rotations, preserving the metric structure so that agents agree on how different two beliefs are), $\mathrm{SL}(d)$ (volume-preserving transformations), and $\mathrm{O}(d)$ (orthogonal transformations). For the concrete derivations in this paper, we work primarily in the flat gauge limit $\Omega_{ij} = I$ or with $G = \mathrm{SO}(d)$ for illustrative purposes, but the general $\mathrm{GL}(d)$ structure is available for applications (such as language modeling \citep{Dennis2025}) where reference frame transformations are not metric-preserving.
+
+As we show later, the flat gauge ($\Omega_{ij} = I$ for all agent pairs) recovers standard consensus models where all agents share a common reference frame. All derivations in this paper, such as the mass formula, classical model limits, and dynamical predictions, hold in the flat gauge limit.
+
+We retain the general gauge structure for three reasons. First, gauge equivariance has proven essential in geometric deep learning: gauge equivariant CNNs \citep{cohen2019gauge} and recent gauge-covariant transformers \citep{he2025cask} demonstrate that enforcing covariance under local reference frame changes substantially improves generalization in learned representations. We conjecture that the same principle applies to social and cognitive modeling, where agents genuinely encode information in incompatible frames (e.g., different cultural schemas, disciplinary vocabularies, or linguistic representations). Second, the gauge framework provides the natural language for multi-agent extensions where reference frame heterogeneity becomes non-trivial, such as cross-cultural opinion dynamics or multi-lingual information processing. Third, the gauge covariance of Hamilton's equations (Appendix~\ref{app:gauge}) ensures that all physical predictions are frame-independent, a desirable theoretical property regardless of whether non-flat gauge is empirically invoked. We emphasize that the core results of this paper do not depend on non-trivial gauge choices; the gauge structure is a principled extension whose empirical relevance we anticipate exploring in future work on cross-cultural belief dynamics and language modeling.
+
+\subsection{Multi-Agent Free Energy}
+
+The total variational free energy for a network of agents balances individual belief maintenance with social consensus pressure (see Appendix~\ref{app:hamiltonian} for the complete derivation and Appendix~\ref{app:social_coupling} for the generative model foundation):
+
+\begin{align}
+\mathcal{F}[\{q_i\}, \{\phi_i\}] &= \sum_i \underbrace{D_{\mathrm{KL}}(q_i \| p_i)}_{\text{Prior beliefs}} + \sum_{i,j} \underbrace{\beta_{ij} D_{\mathrm{KL}}(q_i \| \Omega_{ij} \cdot q_j)}_{\text{Social alignment}} \\
+&\quad - \sum_i \underbrace{\mathbb{E}_{q_i}[\log p(o_i \mid c_i)]}_{\text{Sensory evidence}}
+\end{align}
+
+where $c_i$ denotes the hidden causes (latent state) that agent $i$ infers, with $\mu_i = \mathbb{E}_{q_i}[c_i]$ being the posterior mean belief about these causes. The coefficient $\beta_{ij}$ represents the attention agent $i$ places in agent $j$'s beliefs and we take $p_i$ to be quasi-static. The attention naturally emerges as
+
+\begin{equation}
+\beta_{ij} = \frac{\exp(-D_{\mathrm{KL}}(q_i \| \Omega_{ij} \cdot q_j)/\tau)}{\sum_k \exp(-D_{\mathrm{KL}}(q_i \| \Omega_{ik} \cdot q_k)/\tau)}
+\label{eq:attention_weights}
+\end{equation}
+
+with temperature $\tau$ controlling selectivity. This softmax form is not arbitrary but emerges uniquely from maximum entropy principles (Appendix~\ref{app:softmax}), and recovers the attention mechanism used in transformer architectures. The forward KL direction in the social term is similarly principled (Appendix~\ref{app:forward_kl}).
+
+%==============================================================================
+\subsection{Proper Time as Information-Theoretic Arc Length}
+\label{sec:proper_time}
+%==============================================================================
+
+A fundamental issue in any dynamical theory of belief is the definition of time. Wall-clock time is unsuitable because cognitive processes operate on different timescales for different agents and contexts. We propose defining proper time as the information-theoretic arc length traversed on the statistical manifold whereby time is taken as "a difference which makes a difference".
+
+For an infinitesimal belief change $d\mu$, the proper time increment is
+
+\begin{equation}
+\boxed{d\tau = \sqrt{d\mu^T \Sigma^{-1} d\mu} = \|d\mu\|_{\Sigma^{-1}}}
+\end{equation}
+
+This definition has several appealing properties:
+
+\paragraph{Scale dependence.} For a high-precision agent ($\Sigma$ small, $\Sigma^{-1}$ large), a small change in $\mu$ corresponds to a large proper time such that "time moves fast" in the sense that each update is cognitively significant. For a low-precision agent, the same parametric change corresponds to a small proper time whereby updates are relatively insignificant or slow. A single bit of information is enormous for a simple, small-scale agent but imperceptible for a complex one such as humans.
+
+\paragraph{Information-theoretic interpretation.} To second order, both KL directions give the same result
+
+\begin{equation}
+\text{KL}(q + dq \| q) \approx \text{KL}(q \| q + dq) \approx \frac{1}{2} d\mu^T \Sigma^{-1} d\mu = \frac{1}{2} d\tau^2
+\end{equation}
+
+Thus proper time measures accumulated information change. The choice between KL directions is immaterial at this order.
+
+\paragraph{Invariance.} Proper time is invariant under reparameterization of the belief space, depending only on the intrinsic geometry of the statistical manifold.
+
+For a trajectory $\mu(t)$ parameterized by some external parameter $t$, the total proper time elapsed is:
+\begin{equation}
+\tau = \int \sqrt{\dot{\mu}^T \Sigma^{-1} \dot{\mu}} \, dt
+\end{equation}
+
+This is analogous to proper time in special relativity, where different observers (agents) experience time differently depending on their state. Here, the velocity through belief space determines how quickly proper time accumulates, with high-precision agents experiencing faster proper time for identical parametric motion. Crucially, this metric structure motivates the kinetic energy $T = \frac{1}{2}\dot{\mu}^T \mathbf{M} \dot{\mu}$ adopted in the Hamiltonian formulation below, and the belief perseverance decay time $\tau = M/\gamma$ (Section~\ref{sec:overshoot}) can be understood as the proper time required for a belief to relax to equilibrium.
+
+%==============================================================================
+\subsection{Hamiltonian Formulation of Belief Dynamics}
+\label{sec:hamiltonian}
+%==============================================================================
+
+The proper time metric introduced above equips belief space with a natural notion of kinetic energy: $T = \frac{1}{2}\dot{\mu}^T \mathbf{M} \dot{\mu}$ where $\mathbf{M}$ is derived below. Combined with the free energy as potential, this suggests a Hamiltonian formulation where precision plays the role of inertial mass. We adopt this as an ansatz (not derived from first principles) motivated by the geometric structure and its empirical consequences.
+
+Under the adiabatic approximation where priors evolve slowly relative to beliefs 
+(see Appendix~\ref{app:hamiltonian} for the complete phase space construction), 
+the mass matrix takes a remarkably interpretable form.
+
+
+%------------------------------------------------------------------------------
+\subsection{Mass as Fisher Information: The Complete Derivation}
+%------------------------------------------------------------------------------
+
+The central observation motivating our Hamiltonian ansatz is that the Hessian of the variational free energy---which measures the curvature of the free energy landscape and thus the resistance to belief change---takes the form of a total precision matrix combining all sources of constraint. We compute this Hessian explicitly and adopt it as an inertial mass tensor.
+
+\subsubsection{The Variational Free Energy}
+
+The complete variational free energy for a multi-agent system decomposes as
+
+\begin{equation}
+\mathcal{F} = \underbrace{\sum_i D_{\mathrm{KL}}(q_i \| p_i)}_{\text{complexity}} - \underbrace{\sum_i \mathbb{E}_{q_i}[\log p(o_i|c_i)]}_{\text{accuracy}} + \underbrace{\sum_{i,k} \beta_{ik} D_{\mathrm{KL}}(q_i \| \Omega_{ik}\cdot q_k)}_{\text{consensus}}
+\end{equation}
+
+where $q_i$ is agent $i$'s posterior belief, $p_i$ is agent $i$'s prior, $p(o_i|c_i)$ is the observation likelihood with hidden state $c_i$, $\Omega_{ik}\cdot q_k$ is neighbor $k$'s belief transported into agent $i$'s reference frame, and $\beta_{ik}$ is the attention-weighted coupling strength. Denoting the full state vector $\xi = (\mu_1, \ldots, \mu_N, \Sigma_1, \ldots, \Sigma_N)$, we define the mass matrix as the Hessian of this free energy:
+
+\begin{equation}
+\mathbf{M} = \frac{\partial^2 \mathcal{F}}{\partial\xi\partial\xi^\top}
+\end{equation}
+
+This Hessian defines the effective mass matrix $\mathbf{M}$ for belief dynamics. A key distinction must be noted: this Hessian mass is \emph{not} the intrinsic Fisher-Rao metric $\mathcal{I}(\theta) = \mathrm{Cov}_{q}[(\nabla \log q)(\nabla \log q)^T]$, which depends only on the belief distribution $q_i$. Rather, it is the curvature of the \emph{total free energy landscape}, which incorporates contributions from priors, observations, and social coupling. In the single-agent case with prior $p$ only, the Hessian of $D_{\mathrm{KL}}(q \| p)$ with respect to the parameters of $q$ yields the \emph{reference} distribution's precision $\Lambda_p$, not the Fisher information of $q$ itself. The two coincide only at the critical point $q = p$. We therefore refer to $\mathbf{M}$ as the ``Hessian mass'' to distinguish it from the Fisher-Rao metric, while noting that both reduce to the precision matrix for Gaussians. Each term in $F$ contributes independently to the total mass.
+
+\subsubsection{Contribution 1: Prior Precision}
+
+The complexity cost $D_{\mathrm{KL}}(q_i \| p_i)$ penalizes deviation from the prior. Its Hessian with respect to the mean yields
+
+\begin{equation}
+\frac{\partial^2}{\partial\mu_i\partial\mu_i^\top} D_{\mathrm{KL}}(q_i \| p_i) = \bar{\Sigma}_{p_i}^{-1} \equiv \bar{\Lambda}_{p_i}
+\end{equation}
+
+This is the prior precision, i.e. resistance to deviating from innate or learned expectations.
+
+\subsubsection{Contribution 2: Observation Precision}
+
+The accuracy term $-\mathbb{E}_{q_i}[\log p(o_i|c_i)]$ rewards explaining observations. For a Gaussian observation model $p(o_i|c_i) = \mathcal{N}(o_i \,|\, c_i, R_i)$ where $c_i$ is the hidden cause and $R_i$ is the sensory noise covariance:
+
+\begin{equation}
+\frac{\partial^2}{\partial\mu_i\partial\mu_i^\top} \left[-\mathbb{E}_{q_i}[\log p(o_i|c_i)]\right] = R_i^{-1} \equiv \Lambda_{o_i}
+\end{equation}
+
+This is the observation precision—the inverse sensory noise covariance. Precise observations (small $R_i$, large $\Lambda_{o_i}$) provide strong grounding that resists belief change.
+
+
+\subsubsection{Contribution 3: Social Precision}
+
+The consensus term $\sum_k \beta_{ik} D_{\mathrm{KL}}(q_i \| \Omega_{ik}\cdot q_k)$ penalizes disagreement with neighbors. Taking the Hessian:
+\begin{equation}
+\frac{\partial^2}{\partial\mu_i\partial\mu_i^\top} \sum_k \beta_{ik} D_{\mathrm{KL}}(q_i \| \Omega_{ik}\cdot q_k) = \sum_k \beta_{ik} \Omega_{ik} \Sigma_{q_k}^{-1} \Omega_{ik}^\top = \sum_k \beta_{ik} \tilde{\Lambda}_{q_k}
+\end{equation}
+
+where $\tilde{\Lambda}_{q_k} = \Omega_{ik}\Lambda_{q_k}\Omega_{ik}^\top$ is the precision of neighbor $k$ transported into agent $i$'s frame.
+
+Additionally, agent $i$ appears in the consensus terms of its neighbors $j$, contributing a \textit{reciprocal} mass:
+\begin{equation}
+\frac{\partial^2}{\partial\mu_i\partial\mu_i^\top} \sum_j \beta_{ji} D_{\mathrm{KL}}(q_j \| \Omega_{ji}[q_i]) = \sum_j \beta_{ji} \Lambda_{q_i}
+\end{equation}
+
+\subsubsection{The Complete Mass Formula}
+
+Combining all contributions, the effective mass of agent $i$ is:
+
+\begin{equation}
+\boxed{
+M_i = \underbrace{\bar{\Lambda}_{p_i}}_{\substack{\text{prior} \\ \text{precision}}} + \underbrace{\Lambda_{o_i}}_{\substack{\text{observation} \\ \text{precision}}} + \underbrace{\sum_k \beta_{ik}\tilde{\Lambda}_{q_k}}_{\substack{\text{incoming} \\ \text{social precision}}} + \underbrace{\sum_j \beta_{ji}\Lambda_{q_i}}_{\substack{\text{outgoing} \\ \text{social precision}}}
+}
+\end{equation}
+
+This four-part structure has transparent intuitive meaning. The term $\bar{\Lambda}_{p_i}$ represents \textbf{prior inertia}, the resistance arising from the cost of deviating from deep expectations. The term $\Lambda_{o_i}$ represents \textbf{sensory inertia}, grounding through observation whereby precise senses anchor beliefs. The term $\sum_k \beta_{ik}\tilde{\Lambda}_{q_k}$ represents \textbf{incoming social inertia}, the effect of being pulled toward confident neighbors. Finally, the term $\sum_j \beta_{ji}\Lambda_{q_i}$ represents \textbf{outgoing social inertia}, the recoil from exerting influence on others.
+
+\subsubsection{Interpretation}
+
+The identification of mass with total Fisher information reveals several intuitive phenomena and grounds them geometrically and quantitatively:
+
+\paragraph{Sensory anchoring.} Agents with precise observations ($\Lambda_o$ large) have greater belief inertia. This seems counterintuitive; shouldn't better data make beliefs more flexible? The resolution is that precise observations provide strong evidence for the current state. An agent with low-noise sensors has high Fisher information, meaning small belief changes would dramatically worsen the likelihood fit. The agent is anchored by its own sensory precision. This predicts that experts with reliable instrumentation become harder to move than novices relying on noisy signals; not because the expert is stubborn, but because their high-fidelity observations geometrically constrain the belief manifold. The very precision that makes expertise valuable simultaneously makes it rigid.
+
+ 
+\paragraph{Social amplification.} The social terms show that an agent's inertia is collective. An agent coupled to confident neighbors inherits their precision as mass via the incoming term $\sum_k \beta_{ik}\tilde{\Lambda}_{q_k}$. A population of high-precision agents becomes collectively rigid, while uncertain agents readily reach consensus. This predicts that expertise clusters resist external perturbation: a group of confident specialists, each attending to the others, forms a mutually reinforcing mass that deflects outside information. Conversely, low-confidence agents coalesce readily around any confident neighbor, explaining how charismatic leaders can rapidly consolidate uncertain populations. The dynamics are asymmetric: confident clusters repel, uncertain populations attract.
+
+\paragraph{Reciprocal costs.} The outgoing term $\sum_j \beta_{ji}\Lambda_{q_i}$ reveals that influencing others costs flexibility. An agent that strongly affects its neighbors accumulates inertia from those interactions, becoming less responsive itself. Influence is not free but instead is paid for in epistemic rigidity. The more others attend to your beliefs, the more those beliefs resist change. This has profound implications: leaders become trapped by their followers, gurus ossify under the weight of their disciples' attention, and public figures grow deaf to feedback as their audience grows. Henry Adams observed that "power is poison. Its effect on Presidents has always been tragic" \citep{adams1918education}. Our framework provides a geometric mechanism for this tragedy. The very act of projecting influence onto others accumulates as inertial mass, progressively consuming the capacity for empathy and update. The powerful become rigid not through moral failure but through the geometry of attention: when many minds attend to yours, the Fisher information contributed by those outgoing connections makes belief change increasingly costly. This predicts that influence hierarchies naturally produce epistemic stratification, with those at the top most resistant to information from below.
+
+\begin{tcolorbox}[colback=yellow!5,colframe=orange!75,title=Important Caveat: The Hamiltonian as Ansatz]
+
+The preceding development identifies the Fisher information metric with an inertial mass tensor. This identification is natural and geometrically principled.  The Fisher metric is the unique (up to scaling) Riemannian metric on statistical manifolds. However, we emphasize that the second-order (Hamiltonian) dynamics are an ansatz, not a derivation.
+
+The Fisher metric provides geometry; a notion of distance and curvature on belief space. It does not by itself imply that beliefs evolve according to Hamiltonian mechanics with this metric as mass. We adopt this ansatz because it naturally identifies precision with inertial resistance to belief change; it predicts phenomena (oscillation, overshooting, resonance) observed empirically in attitude change research; it reduces to well-justified gradient flow in the overdamped limit $\gamma \to \infty$; and the derivations of classical sociological models (Section~\ref{sec:classical_limits}) rely \emph{only} on this overdamped limit, not on the full Hamiltonian structure.
+
+The empirical adequacy of the underdamped regime remains to be established. The framework's predictive value lies partly in making this distinction precise: overdamped predictions are geometrically necessary, while underdamped predictions depend on the ansatz.
+\end{tcolorbox}
+
+\section{Results}
+
+%==============================================================================
+\subsection{Cognitive Phenomena from Belief Momentum}
+\label{sec:cognitive-momentum}
+%==============================================================================
+
+The Hamiltonian formulation introduces a quantity absent from standard treatments of Bayesian belief updating we refer to as epistemic momentum. Just as physical momentum allows objects to flow past equilibrium, epistemic momentum allows beliefs to overshoot, oscillate, and resist change in ways that pure gradient descent fundamentally cannot capture. 
+
+
+\begin{definition}[Cognitive Momentum]
+
+The cognitive momentum of agent $i$ is the product of epistemic mass and belief velocity
+
+\begin{equation}
+\boxed{\pi_i = M_i \dot{\mu}_i = \left(\bar{\Lambda}_{p_i} + \Lambda_{o_i}+ \sum_k \beta_{ik}\tilde{\Lambda}_{q_k} + \sum_j \beta_{ji}\Lambda_{q_i}\right) \dot{\mu}_i}
+\end{equation}
+
+where $\dot{\mu}_i$ is the rate of belief change.
+
+\end{definition}
+
+The full theory includes conjugate momentum $\Pi_i^\Sigma$ for covariance dynamics 
+(see Appendix~\ref{app:hamiltonian}), but mean dynamics capture the primary phenomenology.
+
+For an isolated agent with isotropic uncertainty $\Sigma_i = \sigma_i^2 I$, this simplifies to
+
+\begin{equation}
+\pi_i = \frac{1}{\sigma_i^2}\dot{\mu}_i = \Lambda_i \dot{\mu}_i
+\end{equation}
+
+ Momentum is not simply the velocity of belief. A confident agent (high $\Lambda$) moving slowly has the same momentum as an uncertain agent (low $\Lambda$) moving quickly. This asymmetry has interesting consequences for belief dynamics.
+
+\begin{table}[ht]
+\centering
+\caption{Components of cognitive momentum and their psychological interpretations.}
+\label{tab:momentum-components}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{} l l l @{}}
+\toprule
+\textbf{Component} & \textbf{Formula} & \textbf{Psychological Role} \\
+\midrule
+Bare momentum & $\bar{\Lambda}_{p_i}\dot{\mu}_i$ & Inertia from prior expectations \\
+Sensory momentum & $\Lambda_{o_i}\dot{\mu}_i$ & Inertia from observation precision \\
+Social momentum & $\sum_k\beta_{ik}\tilde{\Lambda}_{q_k}\dot{\mu}_i$ & Inertia from social embedding \\
+Recoil momentum & $\sum_j\beta_{ji}\Lambda_{q_i}\dot{\mu}_i$ & Inertia from influencing others \\
+\bottomrule
+
+\end{tabular}
+\end{table}
+
+\subsection{Belief Overshoot and Perseverance}\label{sec:overshoot}
+
+Presently, research treats belief perseverance as a flaw in information processing. Epistemic momentum yields an alternative perspective: perseverance is the natural dynamical consequence of beliefs possessing inertia.
+
+Consider an agent moving toward a conclusion with velocity $\dot{\mu}$ who encounters a sudden shift in evidence (a new equilibrium). An agent lacking inertia would instantly reverse course whereas an inertial agent possesses a "kinetic energy" that must be converted into "potential energy" before they can stop and reverse.
+
+In the low-damping limit, energy conservation on the quadratic free energy landscape dictates that the initial kinetic energy converts to potential energy at the point of maximum overshoot:
+
+\begin{equation}
+\frac{1}{2} M_i |\dot{\mu}_i|^2 = \frac{1}{2} K_i |d_{\text{overshoot}}|^2
+\end{equation}
+
+where $K_i$ is the stiffness (curvature) of the free energy well provided by the new evidence. 
+
+Solving for the overshoot distance:
+
+\begin{equation}
+\boxed{d_{\text{overshoot}} = |\dot{\mu}_i| \sqrt{\frac{M_i}{K_i}}}
+\end{equation}
+
+This result differs from constant-force braking models. It implies that for a given velocity and evidence strength ($K$), the overshoot scales with the square root of the epistemic mass (precision).
+
+This provides a geometric derivation for why high-precision priors ($M \approx \bar{\Lambda}_p$) lead to "stubbornness." A person with deep convictions (high $M$) moving through a line of reasoning possesses enormous epistemic momentum. When they encounter a contradiction (a force $K$), they do not stop immediately. Instead, they "coast" past the logical stopping point, requiring a larger counter-force or longer time to arrest their belief trajectory.This leads to a testable quantitative prediction: the ratio of overshoot distances for high-precision ($\Lambda_H$) versus low-precision ($\Lambda_L$) agents scales as the square root of their precisions:
+
+\begin{equation}
+\frac{d_H}{d_L} = \sqrt{\frac{\Lambda_H}{\Lambda_L}}
+\end{equation}
+
+While less dramatic than a linear scaling, this square-root relationship is a rigid constraint imposed by the harmonic geometry of Gaussian belief spaces.
+
+%------------------------------------------------------------------------------
+\subsection{Belief Oscillation}
+%------------------------------------------------------------------------------
+
+Another prediction of our Hamiltonian epistemic dynamics is oscillation phenomena. Unlike gradient descent, which monotonically approaches equilibrium, Hamiltonian systems can overshoot, oscillate, and decay (see Figure~\ref{fig:phase_portraits})
+
+\begin{figure}[ht]
+    \centering
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../figures/phase_portrait_damped.png}
+        \caption{Overdamped ($\gamma > 2\sqrt{KM}$)}
+        \label{fig:phase_overdamped}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.45\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../figures/phase_portrait_orbit.png}
+        \caption{Underdamped ($\gamma < 2\sqrt{KM}$)}
+        \label{fig:phase_underdamped}
+    \end{subfigure}
+    \caption{Phase portraits of belief dynamics. (a) Overdamped regime: beliefs decay monotonically to equilibrium. (b) Underdamped regime: beliefs exhibit oscillatory dynamics. Both simulations run from $t=0$ to $t=250$ over 10,000 steps.}
+    \label{fig:phase_portraits}
+\end{figure}
+
+
+
+\subsubsection{The Damped Epistemic Oscillator}
+
+The damping coefficient $\gamma$ is not a new free parameter but inherits directly from standard variational inference. To see this, note that in the overdamped limit where $M\ddot{\mu} \ll \gamma\dot{\mu}$, the equation of motion $M\ddot{\mu} + \gamma\dot{\mu} + \nabla F = 0$ reduces to $\gamma\dot{\mu} \approx -\nabla F$, yielding $\dot{\mu} = -\gamma^{-1}\nabla F$. This is precisely gradient descent on the free energy, $\dot{q} = -\nabla_q F$, with learning rate $\eta = \gamma^{-1}$. Thus $\gamma$ is simply the inverse learning rate from standard variational inference. The underdamped regime ($\gamma < 2\sqrt{KM}$) corresponds to fast learning where inertial effects become significant, introducing dynamics not present in first-order treatments.
+
+\begin{equation}
+M_i\ddot{\mu}_i + \gamma_i\dot{\mu}_i + \nabla_{\mu_i}\mathcal{F} = 0
+\end{equation}
+
+where $\gamma_i > 0$ is a damping coefficient.  This equation, from the physics perspective, is the well-known damped harmonic oscillator.
+
+For small displacements from equilibrium $\mu^*$ we have
+
+\begin{equation}
+M_i\ddot{\delta\mu} + \gamma_i\dot{\delta\mu} + K_i\delta\mu = 0
+\end{equation}
+
+where $K_i = \nabla^2 F|_{\mu^*}$ represents the belief's "stiffness" (curvature of free energy at equilibrium, completely analogous to a spring).
+
+Once again we arrive at a quantifiable prediction:
+
+In the sub-critical ($\gamma_i < 2\sqrt{K_i M_i}$) regime, beliefs will oscillate around equilibrium with a frequency and decay time given by
+
+\begin{equation}
+\boxed{\omega = \sqrt{\frac{K_i}{M_i} - \frac{\gamma_i^2}{4M_i^2}} \approx \sqrt{\frac{\text{Evidence strength}}{\text{Epistemic mass}}}}
+\end{equation}
+
+\begin{equation}
+\tau = \frac{2M_i}{\gamma_i}
+\end{equation}
+
+
+\subsubsection{Three Dynamical Regimes}
+
+As the standard physics of oscillators show, the discriminant $\Delta = \gamma_i^2 - 4K_iM_i$ manifestly determines different behaviors. In the over-damped regime ($\Delta > 0$), beliefs decay to equilibrium monotonically without oscillation, resembling standard Bayesian updating in the literature. In the critically damped regime ($\Delta = 0$), the system exhibits the fastest approach to equilibrium without oscillation, suggesting this may be optimal for rapid learning. In the under-damped regime ($\Delta < 0$), beliefs oscillate around the equilibrium value, overshooting periodically before equilibrating, producing distinctly non-standard Bayesian dynamics.
+
+As an intuitive example, consider an agent with strong prior beliefs and low receptivity to counter-evidence. When confronted with strong contradictory evidence, the agent will generally exhibit initial resistance as the high mass $M = \Lambda$ resists the force of evidence, followed by acceleration as persistent evidence eventually accelerates belief change, then overshoot as momentum carries belief past the truth, then oscillation as belief swings between acceptance and rejection, and finally settling as damping eventually brings convergence to equilibrium.
+
+This pattern (resist, over-correct, oscillate) is consistent with phenomena documented in attitude change and belief correction research \citep{Eagly1993, Lewandowsky2012} but remains unexplained by standard Bayesian models. Here we find a natural and intuitive account.
+
+\subsection{Resonant Response to Periodic Evidence}
+
+Driven oscillatory systems exhibit resonance: a well-characterized phenomenon 
+in physics and engineering where response amplitude peaks at a specific driving 
+frequency. This mechanical effect, not to be confused with metaphorical uses of 
+"resonance", makes precise predictions for belief dynamics.
+
+Periodic evidence driving achieves maximum belief change at the agents belief resonance frequency given by
+
+\begin{equation}
+\boxed{\omega_{\text{res}} = \sqrt{\frac{K_i}{M_i}} = \sqrt{\frac{\text{Evidence strength}}{\text{Epistemic mass}}}}
+\end{equation}
+
+
+\subsubsection{Amplitude at Resonance}
+
+For example, with sinusoidal forcing $f(t) = f_0\cos(\omega t)$, the steady-state amplitude is shown (in physics/engineering) to be
+
+\begin{equation}
+A(\omega) = \frac{f_0/M_i}{\sqrt{(\omega_0^2 - \omega^2)^2 + (\gamma\omega/M_i)^2}}
+\end{equation}
+
+where $\omega_0 = \sqrt{K/M}$ is the system's "natural" frequency.
+
+At resonance ($\omega = \omega_{\text{res}} \approx \omega_0$) then, we have
+
+\begin{equation}
+A_{\text{max}} = \frac{f_0}{\gamma_i \sqrt{K_i/M_i}} = \frac{f_0}{\gamma_i}\sqrt{\frac{M_i}{K_i}}
+\end{equation}
+
+Curiously this implies that high-mass (confident) agents have larger resonance amplitudes rather than smaller. While they resist off-resonance forcing, properly timed evidence produces dramatic swings. This prediction then offers myriad applications in psychological/sociological fields (education, advertising, negotiating, therapy, etc).
+
+
+%------------------------------------------------------------------------------
+\subsection{Belief Perseverance in Social Embeddings}
+%------------------------------------------------------------------------------
+
+The characteristic time for a belief to relax toward equilibrium in a social setting is given by
+
+\begin{equation}
+\boxed{\tau = \frac{M_i}{\gamma_i} = \frac{\bar{\Lambda}_{p_i} + \Lambda_{o_i}+ \sum_k\beta_{ik}\tilde{\Lambda}_{q_k} + \sum_j\beta_{ji}\Lambda_{q_i}}{\gamma_i}}
+\end{equation}
+
+
+High-precision beliefs have long decay times. This suggests phenomena where agents tend to hold onto beliefs even after thorough debunking and evidence to their contrary.
+
+For example, if agent A has precision $\Lambda_A = 10$ and agent B has $\Lambda_B = 1$ (both with equal damping $\gamma$), then
+
+\begin{equation}
+\frac{\tau_A}{\tau_B} = \frac{\Lambda_A}{\Lambda_B} = 10
+\end{equation}
+
+Agent A's false beliefs persist ten times longer than that of B's, despite identical evidence exposure.
+
+\subsubsection{The Debunking Problem}
+
+Typically debunking assumes beliefs respond instantaneously to evidence yet our theory of epistemic momentum predicts that immediate debunking is ineffective.  The belief should flow past the correction target. Furthermore, if debunking occurs at intervals matching the belief's natural oscillation period, resonance could amplify rather than dampen the response.  A candidate method for debunking, then, is to properly time the belief trajectory before reinforcing the correction.  However, predicting that time scale for a given agent may be difficult.
+
+
+%------------------------------------------------------------------------------
+\subsection{Sociology and Multi-Agent Momentum Transfer}
+%------------------------------------------------------------------------------
+
+When agents interact through the attention free energy ($\beta_{ij}$ term), momentum can transfer between beliefs, i.e. one agent's beliefs affects another's. This suggests a system of coupled equations of motion given an attention pattern of a multi-agent system.
+
+\subsubsection{Coupled Equations of Motion}
+
+The full multi-agent dynamics with damping are
+
+\begin{equation}
+\boxed{M_i\ddot{\mu}_i + \gamma_i\dot{\mu}_i + \nabla_{\mu_i}\mathcal{F} = 0}
+\end{equation}
+
+We may expand the gradient as 
+
+\begin{equation}
+M_i\ddot{\mu}_i = -\gamma_i\dot{\mu}_i - \bar{\Lambda}_{p_i}(\mu_i - \bar{\mu}_i) - \sum_k\beta_{ik}\tilde{\Lambda}_{q_k}(\mu_i - \tilde{\mu}_k) - \sum_j\beta_{ji}\Lambda_{q_i}\Omega_{ji}^T(\tilde{\mu}_i^{(j)} - \mu_j)
+\end{equation}
+
+Then this can be written as
+
+\begin{equation}
+\boxed{\underbrace{M_i\ddot{\mu}_i}_{\text{Inertia}} = -\underbrace{\gamma_i\dot{\mu}_i}_{\text{Damping}} - \underbrace{\nabla_{\mu_i}\mathcal{F}_{\text{prior}}}_{\text{Prior force}} - \underbrace{\nabla_{\mu_i}\mathcal{F}_{\text{consensus}}}_{\text{Social force}}}
+\end{equation}
+
+\paragraph{Dynamic attention.} The expansion above assumes fixed attention weights $\beta_{ij}$. When attention is dynamic, the gradient includes an additional term from the product rule:
+
+\begin{equation}
+\nabla_{\mu_i} F_{\text{social}} = \sum_j \beta_{ij} \nabla_{\mu_i} D_{\mathrm{KL}_{ij}} + \sum_j D_{\mathrm{KL}_{ij}} \nabla_{\mu_i} \beta_{ij}
+\end{equation}
+
+The second term represents attention reallocation: agents are pulled toward neighbors whose attention would increase most upon approach. This amplifies homophily beyond the direct KL force, accelerating polarization when attention is sharply selective (low $\kappa$). Most derivations in this paper assume fixed attention, neglecting this effect. The full product rule becomes significant when modeling adaptive attention such as in active learning, persuasion dynamics, or computational implementations where attention weights are optimized. We reserve these terms to future investigation.
+
+\paragraph{Regime of validity.} When attention weights $\beta_{ij}$ are dynamic (softmax), the mass matrix $M_i$ itself depends on the state $\{\mu_j, \Sigma_j\}$, making the Hamiltonian non-separable. The clean oscillator results derived below---frequency $\omega = \sqrt{K/M}$, decay time $\tau = M/\gamma$, overshoot distance $d \propto \sqrt{M/K}$---are therefore valid only in the regime of small perturbations around equilibrium, where the mass matrix can be treated as approximately constant. For large-amplitude dynamics or rapidly evolving attention, the state-dependent mass introduces additional nonlinear effects (parametric driving, adiabatic mass variation) not captured by the linearized analysis. The computational validation in Section~\ref{sec:computational_validation} confirms that the linearized predictions are quantitatively accurate for the parameter regimes explored.
+
+
+\subsubsection{Epistemic Momentum Transfer}
+
+
+When agent $k$ changes belief, it transfers epistemic momentum to agent $i$ according to
+
+\begin{equation}
+\frac{d\pi_i}{dt}\bigg|_{\text{from } k} = -\beta_{ik}\tilde{\Lambda}_{q_k}(\mu_i - \tilde{\mu}_k) - \beta_{ki}\Lambda_{q_i}\Omega_{ki}^T(\tilde{\mu}_k^{(i)} - \mu_i)
+\end{equation}
+
+The total momentum transfer over a given interaction time scale $[0, T]$ is
+
+\begin{equation}
+\boxed{\Delta\pi_i = -\int_0^T \left[\beta_{ik}\tilde{\Lambda}_{q_k}(\mu_i - \tilde{\mu}_k) + \beta_{ki}\Lambda_{q_i}\Omega_{ki}^T(\tilde{\mu}_k^{(i)} - \mu_i)\right] dt}
+\end{equation}
+
+
+\subsubsection{Conservation and Non-Conservation}
+
+Without priors and damping, the total momentum is a conserved quantity.
+
+\begin{equation}
+\frac{d}{dt}\sum_i \pi_i = 0 \quad \text{(closed system)}
+\end{equation}
+
+In contrast,  with priors and damping, momentum is assuredly not conserved. Momentum flows into the environment (the prior) and is then dissipated
+
+\begin{equation}
+\frac{d}{dt}\sum_i \pi_i = -\sum_i\gamma_i\dot{\mu}_i - \sum_i\bar{\Lambda}_{p_i}(\mu_i - \bar{\mu}_i)
+\end{equation}
+
+
+This allows us to define a momentum current from agent $k$ to agent $i$ as
+
+\begin{equation}
+J_{k\rightarrow i} = \beta_{ik}\tilde{\Lambda}_{q_k}(\tilde{\mu}_k - \mu_i)
+\end{equation}
+
+This satisfies the continuity equation
+
+\begin{equation}
+\dot{\pi}_i + \gamma_i\dot{\mu}_i + \bar{\Lambda}_{p_i}(\mu_i - \bar{\mu}_i) = \sum_k J_{k\rightarrow i}
+\end{equation}
+
+We find that momentum flows from agents with different beliefs via attention $\beta_{ik}$ and sender precision $\Lambda_{q_k}$. High-precision agents are powerful momentum sources as their motion strongly affects coupled neighbors. However, their strength is weighted by their relative attentions $\beta_{ij}$
+
+%------------------------------------------------------------------------------
+\subsection{Summary}
+%------------------------------------------------------------------------------
+
+\begin{table}[ht]
+\centering
+\caption{Testable predictions from cognitive momentum theory.}
+\label{tab:predictions}
+\renewcommand{\arraystretch}{1.3}
+\begin{tabular}{@{} p{3cm} p{5cm} p{5cm} @{}}
+\toprule
+\textbf{Phenomenon} & \textbf{Prediction} & \textbf{Experimental Test} \\
+\midrule
+Overshoot & Distance $\propto \sqrt{\text{precision}}$ & Measure overshoot vs. confidence \\[6pt]
+Belief oscillation & Under-damped agents overshoot truth and oscillate & Track belief trajectories over time \\[6pt]
+Resonance & Optimal persuasion occurs at $\omega_{\text{res}} = \sqrt{K/M}$ & Vary message timing, measure change \\[6pt]
+Perseverance & Decay time $\tau = M/\gamma$ & Measure false belief persistence vs. uncertainty \\[6pt]
+Social momentum & High-$\Lambda$ agents transfer more momentum & Attention vs. source confidence \\[6pt]
+Recoil & Persuaders become harder to persuade & Measure attitude stiffness after persuasion attempts \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Our epistemic momentum framework unifies seemingly disparate phenomena such as confirmation bias, belief perseverance, oscillation, and social influence into manifestations of a single underlying epistemic Hamiltonian mechanics. Beliefs are not just updated, they are dynamic. Evidence does not instantly change minds but rather applies an epistemic force. Finally, confident beliefs don't only resist change; rather, they possess epistemic inertia that carries them further than evidence alone would have led them.
+
+%==============================================================================
+\subsection{Computational Validation}
+\label{sec:computational_validation}
+%==============================================================================
+
+To validate the theoretical predictions, we conducted numerical simulations using symplectic (leapfrog/St\"ormer-Verlet) integration, which preserves Hamiltonian phase space structure and ensures bounded energy drift over long time scales. Energy conservation was monitored throughout, with typical energy drift below $10^{-6}$ per unit time in the absence of dissipation. Source code for all simulations is available in the public repository.
+
+\subsubsection{Damping Regimes}
+
+We examined the three dynamical regimes predicted by the epistemic oscillator model. For fixed precision $\Lambda = 2$ and evidence strength $K = 1$, the critical damping coefficient is $\gamma_c = 2\sqrt{K\Lambda} \approx 2.83$. We simulated belief evolution from an initial displacement $\mu_0 = 1$ with zero initial momentum under overdamped ($\gamma = 10$), near-critical ($\gamma = 1$), and underdamped ($\gamma = 0.1$) regimes.
+
+The overdamped regime exhibits typical exponential decay toward equilibrium, qualitatively resembling standard Bayesian updating where beliefs approach the posterior without overshooting. The critically damped case achieves the fastest equilibration, reaching the target belief in the least time without oscillations, representing an optimal learning regime. As predicted, the underdamped regime produces damped oscillations as the belief overshoots equilibrium, reverses direction, and undergoes multiple oscillatory cycles before settling.
+
+The phase space portraits reveal the geometric differences between regimes: overdamped trajectories spiral inward, critically damped trajectories approach the origin along a separatrix, and underdamped trajectories execute diminishing elliptical orbits characteristic of a damped harmonic oscillator. The measured decay times match theoretical predictions: in the underdamped case with $\gamma = 0.1$, the observed frequency $\omega = \sqrt{K/\Lambda - \gamma^2/4\Lambda^2} \approx 0.71$~rad/time agrees with theory, and the envelope decay time $\tau = 2\Lambda/\gamma = 40$ matches the observed exponential decay of oscillation amplitude.
+
+\subsubsection{Momentum Transfer Between Coupled Agents}
+
+To demonstrate that epistemic momentum has genuine mechanical consequences in multi-agent systems, we simulated two coupled agents with precisions $\Lambda_1 = 2$ (the influencer) and $\Lambda_2 = 1$ (the follower), connected through symmetric attention coupling $\beta_{12} = \beta_{21} = 0.5$. Agent~1 was initialized with momentum $\pi_1(0) = 2$ while Agent~2 began at rest.
+
+As Agent~1's momentum drives its belief forward, the consensus coupling exerts an epistemic force on Agent~2, accelerating the follower's belief in the same direction. Simultaneously, Agent~2 exerts an equal and opposite force on Agent~1, producing a recoil effect: the influencer's momentum decreases as momentum flows to the follower. Agent~1's momentum drops from its initial value of 2.0 to approximately $-0.75$ at the point of maximum transfer, while Agent~2's momentum rises from zero to a peak of approximately 1.7. Total momentum $\pi_1 + \pi_2$ is not conserved due to dissipative damping and prior anchoring; in the limit of vanishing damping and prior strength, total momentum would be conserved as in an isolated mechanical system. The simulation confirms that social influence is not unidirectional: changing another agent's mind necessarily perturbs one's own epistemic trajectory.
+
+\subsubsection{Confirmation Bias as Stopping Distance}
+
+A central prediction is that confirmation bias emerges naturally from belief inertia. We tested this by simulating pure ballistic motion against constant counter-evidence, measuring the stopping distance as a function of precision. For precision values $\Lambda \in \{0.5, 1.0, 2.0, 4.0, 8.0\}$, agents were initialized with identical velocity $v_0 = 1$ (corresponding to momentum $\pi_0 = \Lambda v_0$) and subjected to constant opposing force $f = 0.5$. The equations of motion reduce to $\Lambda \ddot{\mu} = -f$, yielding a stopping distance $d_{\text{stop}} = \Lambda v_0^2 / 2f$.
+
+Higher-precision agents travel substantially further before stopping: an agent with $\Lambda = 8$ overshoots by approximately 8 units, while an agent with $\Lambda = 0.5$ travels only 0.5 units, representing a 16-fold difference corresponding exactly to the predicted precision ratio ($R^2 = 1.000$). This reframes confirmation bias as a mechanical phenomenon: an agent twice as confident overshoots exactly twice as far when confronted with contradicting evidence, not because they irrationally discount evidence but because their epistemic momentum requires proportionally more opposing force to arrest.
+
+\subsubsection{Resonance Under Periodic Evidence}
+
+For $\tilde{K}$-dimensional belief states, the natural frequencies are eigenvalues of the generalized eigenvalue problem $\omega_i^2 = \text{eig}(\mathbf{M}^{-1}\mathbf{K})$. We simulated resonance by subjecting an agent with $\tilde{K}=3$ latent dimensions ($\gamma = 0.3$, $\lambda_{\text{self}} = 1$, covariance scale $\sigma = 1/\sqrt{2}$) to sinusoidal forcing $f(t) = f_0 \cos(\omega t)$ with $f_0 = 0.5$ across a range of driving frequencies.
+
+The response exhibits a clear resonance peak at $\omega_{\text{res}} \approx 0.385$~rad/time, matching the theoretical dominant natural frequency from the minimum eigenvalue of $\mathbf{M}^{-1}\mathbf{K}$. At frequencies well below resonance, the response is quasi-static; above resonance, the response decays as $1/\omega^2$, as the agent's belief cannot track rapidly oscillating evidence. Agents with anisotropic uncertainty exhibit mode-selective resonance, where periodic evidence along certain directions is amplified while evidence along others is attenuated.
+
+\subsubsection{Belief Perseverance and Decay Time}
+
+In the overdamped limit, dynamics reduce to first-order relaxation with decay time $\tau = \Lambda/\gamma$. Measured decay times for agents with varying precision confirm this linear relationship exactly ($R^2 = 1.000$): an agent with $\Lambda = 8$ exhibits a decay time eight times longer than an agent with $\Lambda = 1$, providing a mechanistic account of the continued influence effect \citep{Lewandowsky2012}.
+
+\subsubsection{Helicopter Task: Overdamped Dynamics as Predicted}
+
+We further validated the framework against empirical data from the helicopter task \citep{mcguire2014}, where high observation noise and frequent environmental change (hazard rate $H \approx 0.1$) place observers in conditions our theory predicts should produce overdamped dynamics. The fitted damping ratios clustered near the critical boundary (mean $= 0.91 \pm 0.12$), with no participants exhibiting sustained oscillations. By BIC, the simple delta rule (equivalent to the zero-momentum limit of our framework) provided the best fit for 31/32 participants (97\%). The fitted momentum parameter was significantly greater than zero (mean $\beta = 0.003 \pm 0.006$, $p = 0.010$) but practically negligible.
+
+This ``null result'' for oscillation is itself a successful prediction: the helicopter task's parameters place observers firmly in the overdamped regime where our framework reduces to standard models. The contribution is not finding inertia here, but explaining \emph{why} gradient descent works in this task while oscillatory dynamics appear elsewhere \citep{kaplowitz1992, burge2010}.
+
+\begin{table}[ht]
+\centering
+\caption{Quantitative validation of theoretical predictions against numerical simulation.}
+\label{tab:validation}
+\begin{tabular}{@{} l c c l @{}}
+\toprule
+\textbf{Prediction} & \textbf{Theory} & \textbf{Measured} & \textbf{Agreement} \\
+\midrule
+Underdamped frequency & $\omega = 0.693$ & $0.693$ & Exact \\
+Envelope decay time & $\tau = 7.07$ & $7.08$ & $< 0.2\%$ \\
+Stopping distance scaling & $d \propto \Lambda$ & $R^2 = 1.000$ & Exact \\
+Resonance frequency & $\omega_0 = 0.385$ & $0.389$ & $< 1.1\%$ \\
+Peak resonance amplitude & $A_{\max} \approx 4.3$ & $\sim 4.3$ & $< 5\%$ \\
+Decay time scaling & $\tau \propto \Lambda$ & $R^2 = 1.000$ & Exact \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The simulations confirm all quantitative predictions of the epistemic momentum framework without parameter adjustment. These results establish internal consistency of the mathematical framework; further empirical validation against human behavioral data remains an important direction for future work.
+
+%==============================================================================
+\section{Classical Sociological Models as Limiting Cases}
+\label{sec:classical_limits}
+%==============================================================================
+
+We now demonstrate that several classical models from sociology and network science emerge from the overdamped limit of our framework. These derivations do \emph{not} depend on the inertial ansatz. We assume the overdamped dynamics follow Riemannian Gradient Flow (Natural Gradient Descent), where the metric tensor determines the path of steepest descent. 
+
+\subsection{DeGroot Social Learning}
+
+\subsubsection{Classical Formulation}
+
+DeGroot's model (1974) describes social learning as iterative averaging of neighbors' beliefs
+
+\begin{equation}
+\mu_i(t+1) = \sum_j w_{ij} \mu_j(t)
+\label{eq:degroot_classical}
+\end{equation}
+
+where $W = [w_{ij}]$ is a row-stochastic matrix ($\sum_j w_{ij} = 1$) representing social influence weights. Under mild conditions, beliefs converge to a consensus determined by the network structure.
+
+\subsubsection{Sociological Context}
+
+DeGroot's model captures the fundamental sociological insight that individuals update beliefs by averaging opinions from their social network. It has been applied to jury deliberation, scientific consensus formation, and organizational decision-making. However, the model treats influence weights $w_{ij}$ as exogenous and fixed, providing no mechanism for how attention emerges from belief similarity.
+
+\subsubsection{Derivation from VFE Framework}
+
+\begin{proposition}[DeGroot as VFE Limit]
+The DeGroot update rule \eqref{eq:degroot_classical} emerges from gradient flow on the VFE under
+
+\begin{enumerate}[label=(\roman*)]
+\item Overdamped dynamics: $\gamma \to \infty$
+\item Low uncertainty: $\Sigma_i \to \sigma^2 I$ with $\sigma^2$ small
+\item Flat manifold: $\Omega_{ij} = I$ (shared reference frames)
+\item No self-coupling: $\alpha = 0$
+\item No observations: $\lambda_{\text{obs}} = 0$
+\item Fixed attention: $\beta_{ij} = w_{ij}$ (constant, not softmax)
+\end{enumerate}
+\end{proposition}
+
+\begin{proof}
+\textbf{Step 1: Simplify VFE.}
+Under these conditions, the free energy reduces to:
+
+\begin{equation}
+\mathcal{F}[\mu] = \frac{\lambda_\beta}{2\sigma^2} \sum_{i,j} w_{ij} \|\mu_i - \mu_j\|^2
+\end{equation}
+
+\textbf{Step 2: Compute gradient.}
+\begin{align}
+\nabla_{\mu_i} F &= \frac{\lambda_\beta}{\sigma^2} \sum_j w_{ij} (\mu_i - \mu_j) \\
+&= \frac{\lambda_\beta}{\sigma^2} \left[\mu_i - \sum_j w_{ij} \mu_j\right] \quad \text{(using row-stochasticity)}
+\end{align}
+
+\textbf{Step 3: Apply gradient flow.}
+The mass matrix is $M_i \approx \sigma^{-2} I$. Gradient flow gives:
+\begin{equation}
+\frac{d\mu_i}{d\tau} = -M_i^{-1}\nabla_{\mu_i} F = -\lambda_\beta\left(\mu_i - \sum_j w_{ij}\mu_j\right)
+\end{equation}
+
+\textbf{Step 4: Discretize.}
+Forward Euler with step size $\Delta\tau = 1/\lambda_\beta$:
+\begin{equation}
+\mu_i(\tau + \Delta\tau) = \sum_j w_{ij}\mu_j(\tau)
+\end{equation}
+
+This is exactly the DeGroot update \eqref{eq:degroot_classical}. We note that recovering the \emph{exact} DeGroot form requires this specific discretization step size; a generic step $\Delta\tau$ yields the interpolation $\mu_i(\tau + \Delta\tau) = (1 - \lambda_\beta\Delta\tau)\mu_i(\tau) + \lambda_\beta\Delta\tau\sum_j w_{ij}\mu_j(\tau)$, which reduces to DeGroot when $\lambda_\beta\Delta\tau = 1$. The continuous-time dynamics are the more fundamental object; DeGroot emerges as a particular temporal discretization. \qed
+\end{proof}
+
+\subsubsection{What the Unified Framework Adds}
+
+\paragraph{Dynamic attention.} Removing the fixed-attention assumption and using softmax attention, influence weights become endogenous:
+\begin{equation}
+\beta_{ij}(\tau) = \frac{\exp(-\|\mu_i(\tau) - \mu_j(\tau)\|^2 / (2\sigma^2\kappa))}{\sum_k \exp(-\|\mu_i(\tau) - \mu_k(\tau)\|^2 / (2\sigma^2\kappa))}
+\end{equation}
+Agents pay more attention to similar others, creating homophily as an emergent property rather than assumption.
+
+\paragraph{Uncertainty dynamics.} Relaxing the uniform-$\Sigma$ assumption, beliefs become full distributions $q_i = \mathcal{N}(\mu_i, \Sigma_i)$. Uncertainty can increase or decrease over time, capturing phenomena like pluralistic ignorance or confidence polarization that mean-only models miss.
+
+\paragraph{Epistemic inertia.} When agents receive asymmetric attention (some have many followers), the outgoing social mass term becomes significant. High-attention agents develop higher mass, making their beliefs more resistant to change---a mechanistic explanation for rigidity in positions of authority.
+
+\subsection{Friedkin-Johnsen Opinion Dynamics}
+
+\subsubsection{Classical Formulation}
+
+Friedkin and Johnsen (1990) extended DeGroot by introducing "stubbornness" as attachment to initial opinions
+
+\begin{equation}
+\mu_i^* = \alpha_i \mu_i(0) + (1 - \alpha_i) \sum_j w_{ij} \mu_j^*
+\label{eq:fj_classical}
+\end{equation}
+
+where $\alpha_i \in [0,1]$ represents agent $i$'s resistance to social influence and $\mu^*$ denotes equilibrium. This model better captures polarization and persistent disagreement, as stubborn agents prevent full consensus.
+
+\subsubsection{Sociological Context}
+
+The Friedkin-Johnsen model addresses a key empirical puzzle: social groups often fail to reach consensus despite dense communication. The stubbornness parameter $\alpha_i$ is typically interpreted as a personality trait or ideological commitment. However, this raises the question: what determines stubbornness, and can it change over time?
+
+\subsubsection{Derivation from VFE Framework}
+
+\begin{proposition}[Friedkin-Johnsen as VFE Equilibrium]
+The Friedkin-Johnsen equilibrium emerges from the VFE framework under DeGroot conditions plus
+
+\begin{enumerate}[label=(\roman*), start=7]
+\item Non-zero self-coupling: $\alpha > 0$
+\item Fixed priors: $p_i = \mathcal{N}(\mu_i(0), \Sigma_p)$ (initial beliefs)
+\end{enumerate}
+
+Moreover, the stubbornness parameter $\alpha_i$ emerges from prior precision and social context.
+\end{proposition}
+
+\begin{proof}
+\textbf{Step 1: VFE with self-coupling.}
+Including the prior term:
+\begin{equation}
+\mathcal{F}[\mu] = \frac{\alpha}{2\Sigma_p} \sum_i \|\mu_i - \mu_i(0)\|^2 + \frac{\lambda_\beta}{2\sigma^2} \sum_{i,j} w_{ij} \|\mu_i - \mu_j\|^2
+\end{equation}
+
+\textbf{Step 2: Equilibrium condition.}
+At steady state, $\nabla_{\mu_i} F = 0$:
+\begin{equation}
+\frac{\alpha}{\Sigma_p}(\mu_i^* - \mu_i(0)) + \frac{\lambda_\beta}{\sigma^2}\left(\mu_i^* - \sum_j w_{ij}\mu_j^*\right) = 0
+\end{equation}
+
+\textbf{Step 3: Solve for equilibrium.}
+\begin{equation}
+\mu_i^* = \frac{\alpha/\Sigma_p}{\alpha/\Sigma_p + \lambda_\beta/\sigma^2}\mu_i(0) + \frac{\lambda_\beta/\sigma^2}{\alpha/\Sigma_p + \lambda_\beta/\sigma^2}\sum_j w_{ij}\mu_j^*
+\end{equation}
+
+Define the \emph{emergent stubbornness}:
+\begin{equation}
+\alpha_i' = \frac{\alpha/\Sigma_p}{\alpha/\Sigma_p + \lambda_\beta/\sigma^2}
+\label{eq:emergent_stubbornness}
+\end{equation}
+
+Then $\mu_i^* = \alpha_i' \mu_i(0) + (1-\alpha_i')\sum_j w_{ij}\mu_j^*$, matching \eqref{eq:fj_classical}.
+\end{proof}
+
+\subsubsection{Mechanistic Stubbornness}
+
+This demonstrates that stubbornness $\alpha_i'$ in \eqref{eq:emergent_stubbornness} is not a fixed personality trait but emerges from two sources:
+
+\paragraph{Prior precision $\Sigma_p^{-1}$.} Agents with strong initial convictions (low $\Sigma_p$) exhibit high stubbornness. This captures ideological commitment or expertise: a climate scientist has high prior precision about global warming, making them resistant to contrarian social influence.
+
+\paragraph{Social coupling strength $\lambda_\beta \sum_j w_{ij}$.} Agents experiencing intense social pressure (many influential neighbors) become less stubborn in equilibrium. However, this same pressure increases their epistemic inertia, slowing their rate of approach to equilibrium demonstrating a subtle but important distinction.
+
+The framework predicts that the same individual should exhibit different degrees of stubbornness across different social contexts thereby contradicting trait-based theories that treat resistance to influence as a stable personality characteristic.
+
+\subsection{Echo Chambers and Polarization}
+
+\subsubsection{Phenomenon}
+
+Echo chambers constitute a self-reinforcing dynamical process: individuals 
+preferentially attend to similar others (homophily), causing in-group beliefs 
+to converge while out-group beliefs diverge, culminating in isolation as 
+cross-group communication declines.
+
+\subsubsection{Derivation from VFE Framework}
+
+\begin{proposition}[Emergent Homophily and Polarization]
+Softmax attention automatically creates homophilic coupling. When initial belief 
+distributions are bimodal, this leads to stable polarized equilibria with 
+within-group consensus and cross-group divergence.
+\end{proposition}
+
+\begin{proof}
+\textbf{Step 1: Softmax creates homophily.}
+For Gaussian beliefs with common covariance $\sigma^2 I$:
+\begin{equation}
+\beta_{ij} = \frac{\exp(-\|\mu_i - \mu_j\|^2 / (2\sigma^2 \kappa))}
+{\sum_k \exp(-\|\mu_i - \mu_k\|^2 / (2\sigma^2 \kappa))}
+\end{equation}
+Similar beliefs yield high $\beta_{ij}$; dissimilar beliefs yield exponentially 
+suppressed attention.
+
+\textbf{Step 2: Polarized equilibrium structure.}
+Consider $N$ agents divided into two groups $A$ and $B$ of equal size $N/2$, 
+with group means $\mu_A$ and $\mu_B$ separated by distance 
+$d = \|\mu_A - \mu_B\|$. At equilibrium, all agents within a group share the 
+group mean.
+
+For agent $i \in A$, define $x = \exp(-d^2/(2\sigma^2\kappa))$. Define the total attention weight allocated to the in-group and out-group as $\beta_{\text{in-group}}$ and $\beta_{\text{out-group}}$. The attention 
+weights are:
+
+\begin{align}
+\beta_{\text{in-group}} &= \frac{N/2 - 1}{(N/2 - 1) + (N/2)x} \\
+\beta_{\text{out-group}} &= \frac{(N/2)x}{(N/2 - 1) + (N/2)x}
+\end{align}
+
+\textbf{Step 3: Stability condition.}
+The gradient flow pulls each agent toward the attention-weighted mean of all 
+others. For the polarized state to be stable, out-group pull must be negligible.
+
+Requiring $\beta_{\text{out-group}} < 1/N$ (out-group attention vanishes as 
+$N \to \infty$):
+\begin{equation}
+\frac{(N/2)x}{(N/2) + (N/2)x} < \frac{1}{N}
+\end{equation}
+
+For large $N$ with $x \ll 1$, this simplifies to $x < 2/N$, yielding:
+\begin{equation}
+\exp\left(-\frac{d^2}{2\sigma^2\kappa}\right) < \frac{2}{N}
+\end{equation}
+
+Taking logarithms:
+\begin{equation}
+\boxed{\|\mu_A - \mu_B\|^2 > 2\sigma^2 \kappa \log(N/2) \approx 2\sigma^2 \kappa \log N}
+\end{equation}
+
+This is the polarization threshold: groups separated by more than 
+$\sqrt{2\sigma^2\kappa\log N}$ in belief space maintain stable segregation. 
+\end{proof}
+
+\subsubsection{Interpretation}
+
+The $\log N$ factor has an intuitive meaning: larger populations require 
+greater belief separation to maintain polarization, because each agent 
+has more potential out-group contacts. However, the dependence is only 
+logarithmic; doubling the population requires only a modest increase in 
+separation.
+
+\subsubsection{Phase Transition in Polarization}
+
+The stability condition reveals a phase transition in the temperature parameter $\kappa$:
+
+\paragraph{High temperature ($\kappa$ large):} Attention is diffuse, cross-group communication persists, system converges to global consensus.
+
+\paragraph{Low temperature ($\kappa$ small):} Attention is sharp, cross-group communication collapses, system locks into polarized state.
+
+The critical temperature scales with initial belief separation
+
+\begin{equation}
+\kappa^{\text{crit}} \sim \frac{\|\mu_A(0) - \mu_B(0)\|^2}{2\sigma^2 \log N}
+\end{equation}
+
+\subsubsection{Connection to Filter Bubbles}
+
+Social media platforms that use engagement-based ranking effectively lower $\kappa$ (sharpen attention toward similar content). The VFE framework predicts this design choice should increase polarization, consistent with empirical observations. Interventions to reduce polarization should target $\kappa$: increasing exposure diversity (raising temperature) or increasing epistemic humility (raising uncertainty $\sigma^2$) can prevent the polarization phase transition.
+
+
+\subsection{Bounded Confidence Models}
+
+\subsubsection{Classical Formulation}
+
+Hegselmann-Krause (2002) and Deffuant et al.\ (2000) introduced bounded confidence: 
+agents only interact with others within a threshold distance $\epsilon$:
+\begin{equation}
+\mu_i(t+1) = \frac{1}{|N_i(\epsilon)|}\sum_{j \in N_i(\epsilon)} \mu_j(t)
+\end{equation}
+where $N_i(\epsilon) = \{j : |\mu_j - \mu_i| < \epsilon\}$. This hard threshold 
+captures the intuition that people ignore opinions too distant from their own.
+
+\subsubsection{Derivation from VFE Framework}
+
+\begin{proposition}[Bounded Confidence as Low-Temperature Limit]
+The bounded confidence dynamics emerge from the VFE framework as the attention 
+temperature $\kappa \to 0$.
+\end{proposition}
+
+\begin{proof}
+\textbf{Step 1: Softmax sharpening.}
+The attention weight from $i$ to $j$ is:
+\begin{equation}
+\beta_{ij} = \frac{\exp(-\|\mu_i - \mu_j\|^2 / (2\sigma^2 \kappa))}
+{\sum_k \exp(-\|\mu_i - \mu_k\|^2 / (2\sigma^2 \kappa))}
+\end{equation}
+As $\kappa \to 0$, this concentrates on the nearest neighbors.
+
+\textbf{Step 2: Effective threshold.}
+An agent at distance $d$ receives attention proportional to 
+$\exp(-d^2/(2\sigma^2\kappa))$. Following the echo chamber analysis, attention 
+becomes negligible ($< 1/N$) when:
+\begin{equation}
+d^2 > 2\sigma^2\kappa\log N
+\end{equation}
+
+Thus the \emph{effective confidence bound} is:
+\begin{equation}
+\boxed{\epsilon_{\text{eff}} = \sigma\sqrt{2\kappa \log N}}
+\end{equation}
+
+\textbf{Step 3: Dynamics correspondence.}
+The VFE gradient flow is $\dot{\mu}_i \propto \sum_j \beta_{ij}(\mu_j - \mu_i)$.
+When $\kappa$ is small, attention concentrates on agents within $\epsilon_{\text{eff}}$:
+\begin{equation}
+\dot{\mu}_i \approx \frac{1}{|N_i(\epsilon_{\text{eff}})|}\sum_{j \in N_i(\epsilon_{\text{eff}})} (\mu_j - \mu_i)
+\end{equation}
+Discretizing with unit time step yields the bounded confidence update. \qed
+\end{proof}
+
+\subsubsection{Key Differences from Classical Models}
+
+\paragraph{Soft vs.\ hard threshold.} The VFE framework produces smooth exponential 
+decay rather than a hard cutoff. This is more psychologically realistic as people 
+don't entirely ignore slightly-too-distant opinions but attend to them with 
+diminishing weight.
+
+\paragraph{Adaptive threshold.} Unlike fixed-$\epsilon$ models, the effective 
+threshold $\epsilon_{\text{eff}} = \sigma\sqrt{2\kappa\log N}$ depends on uncertainty $\sigma$ (uncertain agents tolerate more distant opinions), 
+temperature $\kappa$ (higher temperature broadens the acceptance window), and
+population size $N$ (larger populations have slightly wider effective thresholds).
+
+
+This predicts that high uncertainty reduces polarization by expanding the range of opinions an agent will engage with.
+
+\subsection{Confirmation Bias}
+
+\subsubsection{Natural Gradient Interpretation}
+
+In natural gradient descent, the mass matrix $M_i = \partial^2 F/\partial\mu_i^2$ 
+serves as a metric tensor determining the direction of steepest descent
+
+\begin{equation}
+\frac{d\mu_i}{d\tau} = -M_i^{-1} \nabla_{\mu_i} F
+\end{equation}
+
+This is the same object that plays the role of inertial mass in the Hamiltonian 
+formulation. However, interpreting it as a metric rather than a mass 
+requires only that we accept natural gradient descent as the appropriate dynamics 
+on statistical manifolds. This is a standard assumption in information geometry 
+\citep{Amari2016} such that here we need not the full inertial ansatz.
+
+\subsubsection{Mechanism}
+
+Agents with large $M_i$ update more slowly for the same gradient
+
+\begin{equation}
+\|d\mu_i\| \propto M_i^{-1} \|\nabla_{\mu_i} F\|
+\end{equation}
+
+Since $M_i = \bar{\Lambda}_{p_i} + \Lambda_{o_i} + \sum_k\beta_{ik}\tilde{\Lambda}_{q_k} + \sum_j\beta_{ji}\Lambda_{q_i}$, high mass (slow updating) arises from strong priors, precise observations, confident neighbors, or many followers.
+
+This is confirmation bias whereby high-precision agents respond 
+less to the same evidence because they sit in steep-walled free energy wells.
+
+\subsection{Social Impact Theory}
+
+\subsubsection{Classical Formulation}
+
+Latané's Social Impact Theory (1981) posits that social influence on a target 
+is a multiplicative function of source properties:
+\begin{equation}
+\text{Impact} = f(\text{Strength} \times \text{Immediacy} \times \text{Number})
+\end{equation}
+
+\subsubsection{Correspondence with VFE Framework}
+
+The social force term in our framework provides a quantitative interpretation. 
+The force on agent $i$ from neighbor $j$ is
+
+\begin{equation}
+F_{j \to i} = \beta_{ij} \Lambda_{q_j} (\mu_j - \mu_i)
+\end{equation}
+
+\paragraph{Strength $\leftrightarrow$ $\Lambda_{q_j}$.} Source precision (confidence) amplifies the force exerted on the target.
+
+\paragraph{Immediacy $\leftrightarrow$ $\beta_{ij}$.} Attention weights decay with 
+belief dissimilarity, providing an analog of social/epistemic proximity.
+
+\paragraph{Number $\leftrightarrow$ $\sum_j$.} Total social force sums over all sources.
+
+\subsubsection{Caveat}
+
+This is an interpretive correspondence, not a formal derivation. Latané's 
+immediacy referred to physical proximity; our $\beta_{ij}$ captures epistemic 
+proximity (belief similarity). The VFE framework provides one quantitative 
+instantiation of SIT's qualitative principle.
+
+\subsection{Diffusion of Innovations}
+
+\subsubsection{Classical Formulation}
+
+\citet{rogers2003diffusion} identified a characteristic S-curve pattern in innovation adoption, with distinct adopter categories: innovators (2.5\%), early adopters (13.5\%), early majority (34\%), late majority (34\%), and laggards (16\%).
+
+\subsubsection{Correspondence with VFE Framework}
+
+\begin{proposition}[S-Curve from Attention Dynamics]
+The logistic adoption curve emerges when agents decide between adopt/reject based on social attention from prior adopters, with heterogeneous prior precisions determining adoption order.
+\end{proposition}
+
+The Rogers categories emerge naturally from the distribution of epistemic mass $M_i$. Innovators have low mass due to uncertain priors and few anchoring connections. Early adopters have moderate mass with network positions exposing them to innovators. The early and late majority have moderate-to-high mass and require substantial adopter signal. Laggards have the highest mass due to extreme prior certainty or network isolation.
+
+\paragraph{Commitment trap.} Early adopters who influence others accumulate social mass from those attention connections, becoming resistant to abandoning the innovation even if problems emerge. This explains why early advocates are often the last to admit failure---their outgoing social mass term $\sum_j \beta_{ji}\Lambda_{q_i}$ grows as they gain followers, locking them into their adopted position.
+
+\subsection{Summary of Derivations}
+
+\begin{table}[h]
+\centering
+\begin{tabular}{@{}lccc@{}}
+\toprule
+\textbf{Model} & \textbf{Rigor} & \textbf{Depends on Ansatz?} & \textbf{Notes} \\
+\midrule
+DeGroot & Exact & No & Overdamped limit \\
+Friedkin-Johnsen & Exact & No & Equilibrium solution \\
+Echo Chambers & Derived & No & Softmax attention \\
+Bounded Confidence & Approximate & No & Low-$\kappa$ limit \\
+Confirmation Bias & Geometric & Partially & Mass matrix interpretation \\
+Social Impact Theory & Interpretive & No & Qualitative correspondence \\
+Diffusion of Innovations & Approximate & No & S-curve from heterogeneous mass \\
+\bottomrule
+\end{tabular}
+\caption{Quality assessment of derivations. Core results depend only on gradient flow, not the inertial ansatz.}
+\label{tab:rigor}
+\end{table}
+
+
+\section{Discussion}
+
+\subsection{Unifying Phenomenological Models}
+
+For decades, researchers across psychology, neuroscience, and opinion dynamics have empirically modeled belief change using spring-mass metaphors without theoretical justification. Kaplowitz and Fink's damped oscillator model of attitude change \citet{kaplowitz1983, kaplowitz1992}, which successfully predicted oscillation and overshoot in response to persuasive messages \citep{fink2002}, treated mass and damping as free parameters which they fit to data. Similarly, bounded confidence models in opinion dynamics \citep{hegselmann2002, deffuant2000}, momentum effects in economic expectations \citep{coibion2015}, and overshoot phenomena in perceptual adaptation \citep{webster2015} all invoke inertial dynamics without explaining their origin.
+
+Our central contribution is showing that these are not mere analogies but instead consequences of variational inference on curved statistical manifolds. The Fisher information metric acts as an inertial mass tensor for epistemic dynamics; damping emerges from dissipative terms in the variational principle where the restoring force is the gradient of the variational free energy. This provides a principled basis for parameter values previously treated as phenomenological: epistemic inertia equals $\Lambda_{\text{prior}} + \Lambda_{\text{observation}} + \Lambda_{\text{social}}$, the total precision of an agent's belief; damping $\gamma$ arises from dissipation due to attention, metabolic costs, or environmental noise; and $K$ corresponds to the curvature of the free energy landscape at equilibrium. The framework thus unifies disparate empirical observations under a single geometric principle: beliefs are points on a Riemannian manifold, and their dynamics are geodesic motion with friction.
+
+\subsection{Parameter Regimes and Existing Evidence}
+
+The framework predicts that oscillatory dynamics appear only when 
+$\gamma < 2\sqrt{KM}$ (underdamped). Most laboratory learning tasks—designed 
+with high noise and volatile environments—place observers in the overdamped 
+regime where standard gradient descent suffices. This explains why momentum 
+effects are rarely observed in perceptual learning paradigms.
+
+In contrast, Kaplowitz and Fink \citep{kaplowitz1992} observed attitude 
+oscillation in persuasion studies where participants had strong prior 
+commitments confronting credible counter-evidence—precisely the high-$M$, 
+low-$\gamma$ conditions our framework predicts should produce underdamped 
+dynamics. Both phenomena emerge from the same equations in different 
+parameter regimes.
+
+
+\subsection{Why Was This Overlooked?}
+
+The connection between precision and inertial mass, despite its naturalness, has remained hidden at the intersection of several disciplines that rarely communicate. 
+
+Psychology has historically focused on static biases and heuristics, cataloging the ways beliefs deviate from normative standards rather than the temporal dynamics of how beliefs change \citep{nickerson1998}. Researchers have been reluctant to ask "how fast does this belief evolve?" with appropriate dynamical tools. When oscillation was observed \citep{kaplowitz1983, fink2002}, it remained isolated within communication science, never connecting to the variational principles that would explain why attitudes behave like mechanical systems.
+
+Neuroscience, meanwhile, focuses on gradient-based learning primarily because neural systems are highly damped. Synaptic time constants, metabolic constraints, and homeostatic regulation ensure that neural dynamics operate in the overdamped regime \citep{friston2008hierarchical} \citep{bogacz2017tutorial}. This has led researchers to overlook oscillatory or momentum-like behavior that might otherwise be visible. The brain appears to do gradient descent because it operates in a regime where inertial effects are suppressed rather than because momentum is absent from the underlying mathematics. It has been there the whole time.
+
+Information geometry, meanwhile, provides the mathematical language for these ideas but was developed largely within statistics and machine learning, far from psychological or sociological theory. The Fisher metric was studied as an abstract structure on probability spaces \citep{Amari2016}, not as an inertia tensor governing dynamics.
+
+ 
+Sociology has developed sophisticated models of opinion dynamics, social influence, and collective behavior \citep{degroot1974, friedkin2011, flache2017}, yet these frameworks typically assume instantaneous averaging or threshold-based contagion rather than momentum-carrying dynamics. The insight that social attention directed toward an agent accumulates as epistemic mass (thereby making the attended-to individual more resistant to belief change) requires bridging network science with variational mechanics. This connection was obscured by the disciplinary boundaries separating formal sociology from the physics-inspired methods that would reveal it.
+
+\subsection{Cognitive Biases as Emergent Phenomena}
+
+A striking implication of our framework is that phenomena often attributed to cognitive biases emerge naturally from epistemic inertia rather than requiring separate psychological mechanisms.
+
+Belief perseverance is the tendency for beliefs to persist even after their evidential basis has been discredited \citep{anderson1980, ross1975} follows directly from epistemic mass. High-precision beliefs have large $M = \Lambda$ and thus long relaxation times $\tau = M/\gamma$. They resist change not due to irrationality but because mass resists acceleration. The debriefing paradigm, which demonstrates that beliefs persist after subjects learn the initial evidence was fabricated, is explained by inertia. 
+
+The continued influence effect, whereby misinformation continues to affect reasoning even after correction \citep{Lewandowsky2012}, similarly reflects momentum decay rather than memory failure. Corrections apply a counter-force, but if the original misinformation was encoded with high precision such that the belief's momentum carries it past the corrected equilibrium before dissipation brings it to rest.
+
+Confirmation bias, the tendency to seek and weight evidence consistent with existing beliefs \citep{nickerson1998}, can be reinterpreted as a consequence of inertial dynamics. Beliefs with high epistemic inertia are less deflected by contradictory evidence than by confirmatory evidence. This is not a bias in the pejorative sense but a geometrical consequence of how informationally massive objects respond to epistemic forces.
+
+Perhaps most striking is the prediction that influence itself accumulates as inertial mass. The outgoing social term $\sum_j \beta_{ji}\Lambda_{q_i}$ in the mass formula means that agents whose beliefs are attended to by many others become progressively more rigid. This provides a geometric mechanism for observations that leaders, experts, and public figures often exhibit reduced sensitivity to feedback; what Adams called "poison" and which Solzhenitsyn poetically described as "power is a poison well known for thousands of years... for those who are unaware of any higher sphere, it is a deadly poison. For them there is no antidote" \citep{adams1918education, solzhenitsyn1973gulag}. The phenomenon is not necessarily a moral failure but mathematical inevitability. When many minds attend to yours, the Fisher information contributed by those outgoing connections makes belief change increasingly costly. Empathy, the capacity to update one's model of others, requires precisely the flexibility that influence consumes. This predicts that influence hierarchies naturally produce epistemic stratification, with those at the top most resistant to information from below, and suggests that the "isolation of power" documented by historians and political scientists emerges from the same geometric principles governing individual belief dynamics.
+
+This reframing provides a mechanistic basis for intervention. If belief perseverance stems from high precision rather than stubbornness, then interventions targeting uncertainty (increasing $\gamma/M$) may be more effective than those targeting content. Similarly, if the rigidity of leadership emerges from accumulated social attention, then institutional designs that distribute attention more evenly may preserve epistemic flexibility at the top.
+
+\subsection{Proposed Experimental Tests}
+
+The predictions derived above distinguish the inertial framework from standard first-order Bayesian models. We propose and outline several experiments which could test these predictions. The detailed implementation of these experiments is left for future work.
+
+\subsubsection{Belief Oscillation Under Strong Counter-Evidence}
+
+\paragraph{Prediction:} High-confidence agents should overshoot equilibrium and exhibit non-monotonic belief trajectories when confronted with strong counter-evidence.
+
+\paragraph{Design:} Measure participants' prior beliefs and confidence on contentious topics via incentivized elicitation. Present strong, credible counter-evidence and track belief trajectories via repeated measurements (e.g., slider scales at 1-minute intervals over 20 minutes). 
+
+Standard Bayesian models predict monotonic convergence toward the posterior. The inertial framework predicts that high-confidence participants may transiently overshoot, briefly adopting positions more extreme than the evidence warrants before settling to equilibrium. Any observed non-monotonicity falsifies purely dissipative models.
+
+\subsubsection{Precision-Dependent Relaxation Times}
+
+\paragraph{Prediction:} Belief relaxation time $\tau$ scales linearly with prior precision: $\tau = \Lambda/\gamma$.
+
+\paragraph{Design:} Measure prior confidence via betting procedures or confidence intervals. Following exposure to counter-evidence, measure time to reach stable posterior beliefs across participants varying in initial confidence.
+
+The framework predicts that participants with twice the initial precision require twice the relaxation time, independent of the direction or magnitude of belief change. Standard models predict relaxation rates depend on evidence strength rather than prior confidence.
+
+\subsubsection{Resonant Persuasion}
+
+\paragraph{Prediction:} Periodic messaging achieves maximum belief change amplitude at resonance frequency $\omega_{\text{res}} = \sqrt{K/M}$.
+
+\paragraph{Design:} Deliver persuasive messages at varying intervals (e.g., every 30 seconds, 2 minutes, 5 minutes, 10 minutes) across conditions, holding total exposure constant. Measure final belief change amplitude.
+
+The framework predicts a non-monotonic relationship with a peak at intermediate frequency determined by participant confidence. Standard models predict monotonic effects of message frequency. Resonance is a signature of second-order dynamics.
+
+\subsubsection{Social Attention and Epistemic Rigidity}
+
+ 
+
+\paragraph{Prediction:} Agents who receive sustained social attention accumulate epistemic mass, becoming more resistant to belief revision than equally confident but unattended individuals.
+
+ 
+
+\paragraph{Design:} In a group deliberation paradigm, manipulate attention asymmetry: some participants are designated as "influencers" whose opinions are solicited and displayed to others, while "followers" hold equally strong priors but receive no social attention. After exposure to identical counter-evidence, measure belief change magnitude and relaxation dynamics across conditions.
+
+
+Standard models predict belief change depends on prior confidence and evidence strength, not social role. The inertial framework predicts that attended-to advisors exhibit smaller belief shifts and longer relaxation times than observers with matched initial confidence, due to the social attention term $\sum_j \beta_{ji} \Lambda_{q_i}$ contributing to effective mass.
+ 
+\subsubsection{Momentum in Economic Expectations}
+
+
+\paragraph{Prediction:} Professional forecasters with high precision should exhibit overshooting when revising expectations following macroeconomic surprises.
+
+
+\paragraph{Design:} Analyze existing forecast revision data \citep{coibion2015} following large, unexpected economic announcements (e.g., surprise interest rate changes, employment shocks). Track individual forecaster trajectories over subsequent revision rounds, conditioning on pre-shock forecast confidence.
+
+Standard information models predict gradual, monotonic adjustment toward rational expectations. The inertial framework predicts that high-confidence forecasters may transiently overshoot, revising past the rational benchmark before settling, while low-confidence forecasters adjust monotonically. This pattern, if present in existing panel data, would distinguish momentum-based from friction-based accounts of expectation stickiness.
+
+
+\subsection{Relation to Existing Models}
+
+Table~\ref{tab:model_comparison} summarizes predictions distinguishing the inertial framework from existing approaches.
+
+\begin{table}[ht]
+\centering
+\caption{Predictions distinguishing the inertial framework from first-order models.}
+\label{tab:model_comparison}
+\begin{tabular}{lcc}
+\hline
+\textbf{Phenomenon} & \textbf{First-Order Models} & \textbf{This Framework} \\
+\hline
+Approach to equilibrium & Monotonic & Can oscillate \\
+Precision dependence & Weights evidence & Determines inertia \\
+Overshooting & Not predicted & Predicted (underdamped) \\
+Resonance to periodic input & Not predicted & Predicted \\
+Belief perseverance & Separate bias & Emerges from mass \\
+Continued influence & Memory failure & Momentum decay \\
+Social momentum transfer & Absent & Predicted \\
+Attention increases rigidity & Not predicted & Predicted (social mass) \\
+Forecast overshooting & Friction/stickiness & Momentum decay \\
+\hline
+\end{tabular}
+\end{table}
+
+Standard Bayesian updating and its neural implementations (predictive coding, active inference) correspond to first-order dissipative dynamics \citep{Friston2010, bogacz2017tutorial}. The free energy principle emerges as a limiting case: in the overdamped limit ($\gamma \gg 2\sqrt{KM}$), inertial terms become negligible and dynamics reduce to gradient descent on the free energy landscape. Novel predictions arise when damping is sufficiently weak that second-order terms contribute meaningfully. Recent work on multi-agent active inference \citep{flache2017models} and epistemic communities explores social extensions of the free energy principle, but without the gauge-geometric structure or inertial dynamics developed here.
+
+The connection between momentum methods in optimization and Hamiltonian mechanics has been established in the machine learning literature \citep{diakonikolas2021momentum}, where heavy-ball and Nesterov acceleration are analyzed as discretizations of continuous-time Hamiltonian systems. Our framework applies this same physical insight to belief dynamics rather than parameter optimization, identifying the Fisher information (precision) as the natural mass rather than treating it as a hyperparameter.
+
+The DeGroot model of social learning \citep{degroot1974} and its extensions assume instantaneous opinion averaging without momentum. Recent work has extended these models with memory effects and higher-order interactions, but the core dynamics remain first-order. Our framework predicts that strongly-held beliefs (high $\Lambda$) should resist social influence and potentially induce oscillatory collective dynamics in networks with strong coupling. These phenomena are absent from standard consensus models but consistent with observed polarization dynamics.
+
+We note that recent Bayesian accounts of confirmation bias \citep{daSilva2023confirmation} explain the phenomenon as a consequence of resource-rational approximations to exact inference. Our geometric account is complementary: where resource-rationality attributes bias to computational limitations, the inertial framework attributes it to the curvature of the free energy landscape. Both perspectives predict that higher confidence produces stronger bias, but through different mechanisms (approximation quality vs. epistemic mass).
+
+\subsection{Hierarchical Extensions}
+
+The microscopic dynamics developed here (belief equilibration timescales $\tau = M/\gamma$, conditions for oscillatory versus monotonic convergence, momentum transfer through attention networks) provide the foundation for multi-scale theories of collective belief. In forthcoming work, we show that agents achieving sufficient consensus undergo dynamical renormalization-like coarse-graining, yielding emergent informational meta-agents (e.g. institutions, economies, societies) with their own shared beliefs, precisions, and gauge frames. The present framework supplies the dynamics underlying such emergence.  The conditions under which individual beliefs synchronize, the timescales of collective equilibration, and the momentum currents that drive or resist consensus formation lead to emergent informational hierarchies.
+
+Critically, our theory makes no distinction between "physical" and "abstract" informational systems. The same equations governing individual belief dynamics may similarly apply to institutional beliefs (corporate strategy, scientific consensus, market expectations), with appropriate identification of the relevant state spaces and attention structures.
+
+\subsection{Gauge Curvature and Epistemic Frustration}
+\label{sec:curvature_predictions}
+
+The derivations in Section~\ref{sec:classical_limits} assumed flat gauge ($\Omega_{ij} = I$), under which all agents share a common reference frame. However, the general framework admits non-flat connections where the holonomy around a closed loop $\gamma = (i \to j \to k \to i)$,
+\begin{equation}
+F_\gamma = \Omega_{ij}\Omega_{jk}\Omega_{ki} \neq I,
+\end{equation}
+measures the accumulated frame distortion when beliefs are transported around a social cycle. Nonzero curvature represents \emph{epistemic frustration}: the impossibility of consistently aligning all agents' reference frames simultaneously. This geometric obstruction generates predictions absent from flat-gauge sociology, which we outline here as directions for future investigation.
+
+\paragraph{Intransitive understanding.} Consider three agents---say a physicist ($i$), an economist ($j$), and a sociologist ($k$)---who each share overlapping vocabulary with their neighbors but encode concepts in incompatible frames. The physicist and economist may agree on what ``equilibrium'' means ($\Omega_{ij} \approx I$ in that subspace), and the economist and sociologist may agree on what ``rational agent'' means ($\Omega_{jk} \approx I$), but when the physicist and sociologist attempt direct communication, the composed transport $\Omega_{ij}\Omega_{jk}$ may not equal the direct transport $\Omega_{ik}$. The holonomy $F_\gamma = \Omega_{ij}\Omega_{jk}\Omega_{ki} \neq I$ quantifies this \emph{intransitivity of understanding}. The framework predicts that triadic closure in interdisciplinary networks should be inhibited by gauge curvature: agents who understand each other pairwise through intermediaries may nonetheless fail to reach mutual understanding directly, because the composed frame transformations accumulate distortion that a direct interaction would not.
+
+\paragraph{Persistent disagreement under apparent consensus.} In a flat-gauge network, consensus ($\mu_i = \mu_j$ for all $i,j$) is an attainable equilibrium. With nonzero curvature, however, there may exist no global belief state that simultaneously minimizes all pairwise alignment costs $D_{\mathrm{KL}}(q_i \| \Omega_{ij} q_j)$. The social free energy develops a ``frustration energy'' analogous to spin glasses \citep{mezard1987spin}: the system cannot satisfy all local alignment constraints simultaneously, and the ground state exhibits residual disagreement even after exhaustive deliberation. This predicts that in networks with high gauge curvature (e.g., cross-cultural negotiations, interdisciplinary collaborations), consensus should be systematically harder to achieve than network topology alone would predict. The obstruction is geometric, not motivational.
+
+\paragraph{Holonomy-induced polarization.} Even when two agents $i$ and $j$ hold identical beliefs in their respective frames ($\mu_i = \mu_j$ in each local coordinate system), the transported comparison $\Omega_{ij}\mu_j$ may differ from $\mu_i$ if the gauge frames are misaligned. Two communities may share factual beliefs but disagree because they encode those beliefs in rotated reference frames---for instance, framing the same economic policy as ``protecting workers'' versus ``restricting markets.'' The framework predicts that framing-induced polarization should be distinguishable from content-based polarization: agents with high mutual KL divergence $D_{\mathrm{KL}}(q_i \| \Omega_{ij}q_j)$ despite similar marginal beliefs $\mu_i \approx \mu_j$ are separated by gauge curvature rather than genuine disagreement. Interventions that ``flatten'' the gauge (e.g., establishing shared vocabulary or common framing) should reduce this component of polarization, whereas content-directed interventions should not.
+
+\paragraph{Cultural translation losses.} Translating a concept from culture $A$ to culture $B$ to culture $C$ and back to $A$ should accumulate holonomy: the re-imported concept will generally differ from the original by a transformation $F_\gamma \in G$ that measures the total distortion. This predicts that in multilateral diplomacy or international scientific collaboration, the fidelity of concept transmission should degrade with the number of intermediate translations, and the degradation should depend on the curvature of the gauge connection (the degree of frame incompatibility) rather than on the semantic content of the beliefs themselves. Longitudinal studies of concept drift across translation chains could test this prediction quantitatively.
+
+\paragraph{Curvature-driven instability.} In lattice gauge theory, high curvature configurations carry high energy and are dynamically suppressed. By analogy, social networks with high gauge curvature should be dynamically unstable: the frustrated free energy drives agents to either (a) reduce curvature by aligning their frames (cultural homogenization), (b) reduce connectivity by severing cross-group links (network fragmentation), or (c) reduce attention to frustrating neighbors (selective disengagement). This predicts a phase diagram in the $(\kappa, \|F_\gamma\|)$ plane, where $\kappa$ is attention temperature and $\|F_\gamma\|$ measures average curvature. At low $\kappa$ and high $\|F_\gamma\|$, the network should fragment along curvature boundaries---a geometric mechanism for the formation of epistemic communities that is distinct from both homophily (similarity-driven) and bounded confidence (threshold-driven) accounts.
+
+\paragraph{Measurability.} While gauge frames $\phi_i$ are not directly observable, the curvature $F_\gamma$ is in principle measurable from behavioral data. If agents $i$, $j$, $k$ each demonstrate pairwise agreement in bilateral conversations but exhibit systematic disagreement in triadic interaction, the discrepancy provides an estimate of $\|F_\gamma - I\|$. Experimental paradigms in which participants first calibrate understanding in pairs, then attempt group consensus, could measure gauge curvature directly. The framework predicts that the magnitude of triadic disagreement (controlling for pairwise agreement) should correlate with the heterogeneity of disciplinary, cultural, or linguistic backgrounds---a quantitative test of the gauge curvature hypothesis.
+
+\subsection{Limitations}
+
+Several simplifying assumptions warrant future relaxation.
+
+\textbf{Gaussian beliefs.} While analytically tractable, Gaussian distributions cannot capture the multi-modal posteriors characteristic of hypothesis competition, cognitive dissonance, or attitude ambivalence. Extension to exponential families is developed in Appendix~\ref{app:exponential_family}; extension to arbitrary distributions requires numerical methods or variational approximations.
+
+\textbf{Quasi-static precision.} We have treated precision $\Lambda$ as slowly-varying relative to the mean $\mu$ for demonstrative purposes. The complete theory couples mean and precision dynamics on $\mathbb{R}^d \times \mathrm{SPD}(d)$, allowing precision itself to oscillate or exhibit inertia.
+
+\textbf{Empirical validation.} We emphasize that the present contribution is primarily theoretical: the unification of classical sociological models under a single variational principle and the characterization of epistemic inertia as a geometric phenomenon. The overdamped derivations (Section~\ref{sec:classical_limits}) stand independently of the Hamiltonian ansatz and constitute the paper's most robust claims. Direct observation of the underdamped predictions---belief oscillation, precision-scaled relaxation, or resonant persuasion---remains for future experimental work. The Kaplowitz-Fink results \citep{kaplowitz1983, fink2002} provide suggestive evidence, and publicly available datasets on opinion dynamics, economic expectation revisions \citep{coibion2015}, and perceptual adaptation provide natural targets for quantitative validation against the framework's specific functional forms. We intend to pursue such validation in subsequent work.
+
+
+
+\section{Conclusion}
+
+We have proposed that beliefs naturally possess inertia proportional to their precision. The identification of epistemic mass with statistical precision---specifically, the four-part mass formula $M_i = \bar{\Lambda}_{p_i} + \Lambda_{o_i} + \sum_k \beta_{ik}\tilde{\Lambda}_{q_k} + \sum_j \beta_{ji}\Lambda_{q_i}$---transforms our understanding of belief dynamics and provides tools that extend beyond dissipative gradient flow into Hamiltonian mechanics on statistical manifolds.
+
+This framework yields two classes of results with different epistemic status. The overdamped results, including the derivations of DeGroot social learning, Friedkin-Johnsen opinion dynamics, bounded confidence models, echo chamber formation, and Social Impact Theory as limiting cases, depend only on natural gradient flow on the statistical manifold and the identification of the Fisher metric as the relevant Riemannian structure. These derivations are geometrically necessary given the framework's premises and do not rely on the Hamiltonian ansatz. The underdamped results, including predictions of belief oscillation, overshooting, resonance, and momentum transfer, depend on the additional assumption that beliefs evolve according to Hamiltonian mechanics with the Fisher metric as inertial mass. While geometrically motivated, these predictions remain to be validated experimentally.
+
+The framework reframes cognitive biases not as irrationality but as consequences of belief inertia. Confirmation bias emerges as epistemic stopping distance, belief perseverance as precision-dependent relaxation time, and the rigidity of leadership as accumulated social mass from outgoing attention. Perhaps most striking is the prediction that influence itself is self-consuming: the outgoing social mass term means that the more others attend to your beliefs, the less flexible those beliefs become. This provides a geometric mechanism for the ``isolation of power'' documented across history.
+
+The unification of classical sociological models under a single variational principle is, in our view, the most robust contribution. That DeGroot averaging, Friedkin-Johnsen stubbornness, bounded confidence thresholds, and echo chamber formation all emerge from the same free energy functional under different parameter regimes suggests that the information-geometric perspective captures something fundamental about how beliefs propagate through social networks.
+
+Several directions remain open. Empirical validation of the underdamped predictions---particularly belief oscillation under strong counter-evidence and resonant persuasion at characteristic frequencies---would establish whether the Hamiltonian ansatz provides genuine explanatory power beyond the overdamped regime. Extension to non-Gaussian beliefs (Appendix~\ref{app:exponential_family}) and hierarchical multi-scale dynamics, where consensus clusters undergo renormalization-like coarse-graining into emergent meta-agents, represent natural theoretical extensions. The connection between attention temperature $\kappa$ and social media design suggests that the framework may inform policy discussions around algorithmic content curation and polarization.
+
+The mathematics has been hiding in plain sight for decades, obscured by disciplinary boundaries between differential geometry, physics, and information theory. The Fisher information metric has long been recognized as the unique Riemannian metric on probability spaces. That it simultaneously serves as an inertia tensor for the dynamics of thought may be among its most consequential applications.
+
+\subsection*{Data Availability}
+All code and data will be made publicly available upon publication at \\ 
+https://github.com/cdenn016/Sociology-Psychology-Epistemic-Inertia
+
+
+\subsection*{Acknowledgments}
+Claude Sonnet 4.5 was utilized for programming our variational free energy descent simulation suite.  All code was manually reviewed, corrected, and mathematically validated by the author.  Furthermore, Claude was utilized for typesetting figures, LaTeX equations, and general organizational and manuscript clarity advice. The author further declares no funding or conflicts of interest.
+
+\appendix
+
+%==============================================================================
+% APPENDIX B: GAUGE FRAME VARIATIONS AND PULLBACK GEOMETRY
+%==============================================================================
+
+\section{Gauge Frame Variations and Pullback Geometry}
+\label{app:gauge}
+
+The Hamiltonian formulation of belief dynamics reflects deep geometric structure. Each agent's belief space carries a gauge freedom: the choice of coordinate frame in which beliefs are expressed. Physical quantities must be invariant under these gauge transformations, while the dynamics must be covariant. This appendix develops the transformation theory for the mass matrix, momenta, and Hamilton's equations under gauge frame variations.
+
+%------------------------------------------------------------------------------
+\subsection{Gauge Structure of Multi-Agent Belief Systems}
+%------------------------------------------------------------------------------
+
+\subsubsection{The Principal Bundle}
+
+The geometric setting is a principal $G$-bundle $\pi: P \to \mathcal{C}$ where $\mathcal{C}$ denotes the base manifold encoding agent positions and social network topology, $G \subseteq \mathrm{GL}(d)$ is the gauge group acting on belief space, and the fiber $\pi^{-1}(c)$ over each point $c \in \mathcal{C}$ is the space of reference frames. The natural choice is $G = \mathrm{GL}(d)$ (the maximal group under which KL divergence is invariant), though metric-preserving subgroups such as $\mathrm{SO}(d)$ are appropriate when agents share a common notion of statistical distance. The results in this appendix hold for any closed subgroup $G \subseteq \mathrm{GL}(d)$.
+
+Each agent $i$ located at $c_i \in \mathcal{C}$ expresses beliefs in a local frame. The \textbf{transport operator} $\Omega_{ik} \in G$ relates agent $k$'s frame to agent $i$'s frame.
+
+\subsubsection{Gauge Transformations}
+
+A \textbf{gauge transformation} is a smooth assignment of group elements to each agent
+
+\begin{equation}
+g: \{1, \ldots, N\} \to G, \quad i \mapsto g_i
+\end{equation}
+
+Under this transformation, belief parameters transform as:
+\begin{align}
+\mu_i &\mapsto \mu_i' = g_i \mu_i \\
+\Sigma_i &\mapsto \Sigma_i' = g_i \Sigma_i g_i^T \\
+\Lambda_{q_i} &\mapsto \Lambda_{q_i}' = g_i \Lambda_{q_i} g_i^T
+\end{align}
+
+The transport operators transform as:
+\begin{equation}
+\Omega_{ik} \mapsto \Omega_{ik}' = g_i \Omega_{ik} g_k^{-1}
+\end{equation}
+
+This ensures that the transported belief $\tilde{q}_k = \Omega_{ik}\cdot q_k$ transforms consistently:
+\begin{equation}
+\tilde{\mu}_k' = g_i \tilde{\mu}_k, \quad \tilde{\Lambda}_{q_k}' = g_i \tilde{\Lambda}_{q_k} g_i^T
+\end{equation}
+
+%------------------------------------------------------------------------------
+\subsection{Transformation of the Mass Matrix}
+%------------------------------------------------------------------------------
+
+\subsubsection{Mean Sector}
+
+The mean-sector mass matrix transforms as a tensor under gauge transformations.
+
+\paragraph{Diagonal blocks:}
+\begin{align}
+[\mathbf{M}^\mu]_{ii}' &= \bar{\Lambda}_{p_i}' + \sum_k \beta_{ik}\tilde{\Lambda}_{q_k}' + \sum_j \beta_{ji}\Lambda_{q_i}' \nonumber\\
+&= g_i\bar{\Lambda}_{p_i} g_i^T + \sum_k \beta_{ik} g_i\tilde{\Lambda}_{q_k} g_i^T + \sum_j \beta_{ji} g_i\Lambda_{q_i} g_i^T \nonumber\\
+&= g_i \left[\bar{\Lambda}_{p_i} + \sum_k \beta_{ik}\tilde{\Lambda}_{q_k} + \sum_j \beta_{ji}\Lambda_{q_i}\right] g_i^T \nonumber\\
+&= g_i \, [\mathbf{M}^\mu]_{ii} \, g_i^T
+\end{align}
+
+\paragraph{Off-diagonal blocks:}
+\begin{align}
+[\mathbf{M}^\mu]_{ik}' &= -\beta_{ik}\Omega_{ik}'\Lambda_{q_k}' - \beta_{ki}\Lambda_{q_i}'(\Omega_{ki}')^T \nonumber\\
+&= -\beta_{ik}(g_i\Omega_{ik}g_k^{-1})(g_k\Lambda_{q_k} g_k^T) - \beta_{ki}(g_i\Lambda_{q_i} g_i^T)(g_k\Omega_{ki}g_i^{-1})^T \nonumber\\
+&= -\beta_{ik} g_i\Omega_{ik}\Lambda_{q_k} g_k^T - \beta_{ki} g_i\Lambda_{q_i}\Omega_{ki}^T g_k^T \nonumber\\
+&= g_i \, [\mathbf{M}^\mu]_{ik} \, g_k^T
+\end{align}
+
+\paragraph{Block matrix form:}
+
+Define the block-diagonal gauge matrix:
+\begin{equation}
+\mathbf{G} = \mathrm{diag}(g_1, g_2, \ldots, g_N) \in G^N
+\end{equation}
+
+Then the full mean-sector mass matrix transforms as:
+\begin{equation}
+\boxed{(\mathbf{M}^\mu)' = \mathbf{G} \, \mathbf{M}^\mu \, \mathbf{G}^T}
+\end{equation}
+
+This is the transformation law for a $(0,2)$-tensor (metric tensor) on the product manifold.
+
+\subsubsection{Covariance Sector}
+
+The covariance-sector mass involves Kronecker products. Under gauge transformation:
+\begin{align}
+[\mathbf{M}^\Sigma]_{ii}' &= \frac{1}{2}(\Lambda_{q_i}' \otimes \Lambda_{q_i}') \cdot \left(1 + \sum_k \beta_{ik} + \sum_j \beta_{ji}\right) \nonumber\\
+&= \frac{1}{2}(g_i\Lambda_{q_i} g_i^T \otimes g_i\Lambda_{q_i} g_i^T) \cdot \left(1 + \sum_k \beta_{ik} + \sum_j \beta_{ji}\right) \nonumber\\
+&= \frac{1}{2}(g_i \otimes g_i)(\Lambda_{q_i} \otimes \Lambda_{q_i})(g_i^T \otimes g_i^T) \cdot \left(1 + \sum_k \beta_{ik} + \sum_j \beta_{ji}\right)
+\end{align}
+
+The transformation law is:
+\begin{equation}
+\boxed{(\mathbf{M}^\Sigma)' = (\mathbf{G} \otimes \mathbf{G}) \, \mathbf{M}^\Sigma \, (\mathbf{G}^T \otimes \mathbf{G}^T)}
+\end{equation}
+
+\subsubsection{Cross Blocks}
+
+The mean-covariance cross blocks transform as:
+\begin{equation}
+(\mathbf{C}^{\mu\Sigma})' = \mathbf{G} \, \mathbf{C}^{\mu\Sigma} \, (\mathbf{G}^T \otimes \mathbf{G}^T)
+\end{equation}
+
+%------------------------------------------------------------------------------
+\subsection{Transformation of Momenta}
+%------------------------------------------------------------------------------
+
+For Hamilton's equations to be covariant, momenta must transform contragrediently to positions.
+
+\subsubsection{Mean Momentum}
+
+The mean momentum transforms as a covector:
+\begin{equation}
+\boxed{(\pi_i^\mu)' = g_i \, \pi_i^\mu}
+\end{equation}
+
+This ensures the pairing $\langle\pi^\mu, \dot{\mu}\rangle$ is gauge-invariant:
+\begin{equation}
+\langle(\pi^\mu)', \dot{\mu}'\rangle = (g_i\pi_i^\mu)^T(g_i\dot{\mu}_i) = (\pi_i^\mu)^T g_i^T g_i \dot{\mu}_i = (\pi_i^\mu)^T\dot{\mu}_i = \langle\pi^\mu, \dot{\mu}\rangle
+\end{equation}
+
+\subsubsection{Covariance Momentum}
+
+The covariance momentum $\Pi^\Sigma \in \mathrm{Sym}(d)$ transforms as:
+\begin{equation}
+\boxed{(\Pi_i^\Sigma)' = g_i \, \Pi_i^\Sigma \, g_i^T}
+\end{equation}
+
+The pairing with $\dot{\Sigma}$ uses the trace:
+\begin{equation}
+\mathrm{tr}[(\Pi^\Sigma)'\dot{\Sigma}'] = \mathrm{tr}[(g_i\Pi_i^\Sigma g_i^T)(g_i\dot{\Sigma}_i g_i^T)] = \mathrm{tr}[\Pi_i^\Sigma\dot{\Sigma}_i]
+\end{equation}
+where we used cyclicity of the trace and $g_i^T g_i = I$.
+
+%------------------------------------------------------------------------------
+\subsection{Covariance of Hamilton's Equations}
+%------------------------------------------------------------------------------
+
+\subsubsection{Velocity Equation}
+
+The velocity equation $\dot{\mu} = (\mathbf{M}^\mu)^{-1}\pi^\mu$ transforms as:
+\begin{align}
+\dot{\mu}' &= ((\mathbf{M}^\mu)')^{-1}(\pi^\mu)' \nonumber\\
+&= (\mathbf{G}\mathbf{M}^\mu\mathbf{G}^T)^{-1}\mathbf{G}\pi^\mu \nonumber\\
+&= \mathbf{G}^{-T}(\mathbf{M}^\mu)^{-1}\mathbf{G}^{-1}\mathbf{G}\pi^\mu \nonumber\\
+&= \mathbf{G}^{-T}(\mathbf{M}^\mu)^{-1}\pi^\mu = \mathbf{G}^{-T}\dot{\mu}
+\end{align}
+
+For the metric-preserving subgroup $G = \mathrm{SO}(d)$, we have $\mathbf{G}^{-T} = \mathbf{G}$ and velocities transform as vectors: $\dot{\mu}' = \mathbf{G}\dot{\mu}$. For general $G \subseteq \mathrm{GL}(d)$, velocities transform contragrediently: $\dot{\mu}' = \mathbf{G}^{-T}\dot{\mu}$. In either case, the kinetic energy $T = \frac{1}{2}\dot{\mu}^T\mathbf{M}^\mu\dot{\mu}$ is gauge-invariant, since $(\dot{\mu}')^T(\mathbf{M}^\mu)'\dot{\mu}' = \dot{\mu}^T\mathbf{G}^{-1}\mathbf{G}\mathbf{M}^\mu\mathbf{G}^T\mathbf{G}^{-T}\dot{\mu} = \dot{\mu}^T\mathbf{M}^\mu\dot{\mu}$.
+
+\subsubsection{Force Equation}
+
+The force equation involves the free energy gradient. Under gauge transformation:
+\begin{equation}
+\left(\frac{\partial F}{\partial\mu_i}\right)' = g_i \frac{\partial F}{\partial\mu_i}
+\end{equation}
+
+This follows from the chain rule and the invariance of $F$ under gauge transformations when transport operators transform consistently.
+
+The geodesic force transforms similarly, ensuring full covariance:
+\begin{equation}
+\boxed{\dot{\pi}' = \mathbf{G}\dot{\pi}}
+\end{equation}
+
+%------------------------------------------------------------------------------
+\subsection{The Connection and Its Variation}
+%------------------------------------------------------------------------------
+
+\subsubsection{Connection 1-Form}
+
+The transport operators $\Omega_{ik}$ encode a discrete connection on the agent network. For agents connected along an edge $e = (i,k)$, define:
+\begin{equation}
+A_e = \Omega_{ik} \in G
+\end{equation}
+
+Under gauge transformation:
+\begin{equation}
+A_e \mapsto A_e' = g_i A_e g_k^{-1}
+\end{equation}
+
+This is the discrete analog of the gauge transformation $A \mapsto gAg^{-1} + g\,dg^{-1}$ for continuous connections.
+
+\subsubsection{Curvature}
+
+The curvature around a closed loop $\gamma = (i \to j \to k \to i)$ is:
+\begin{equation}
+F_\gamma = \Omega_{ij}\Omega_{jk}\Omega_{ki} \in G
+\end{equation}
+
+This is gauge-covariant: $F_\gamma' = g_i F_\gamma g_i^{-1}$.
+
+A \textbf{flat connection} satisfies $F_\gamma = I$ for all loops, meaning beliefs can be consistently parallel-transported around any cycle. Nonzero curvature represents "information geometry frustration" whereby belief frames cannot be consistently aligned around cycles.
+
+\subsubsection{Variation of Connection}
+
+Consider an infinitesimal variation of the connection:
+\begin{equation}
+\delta\Omega_{ik} = \omega_{ik} \, \Omega_{ik}, \quad \omega_{ik} \in \mathfrak{g}
+\end{equation}
+
+The variation of transported precision is:
+\begin{equation}
+\delta\tilde{\Lambda}_k = \omega_{ik}\tilde{\Lambda}_k + \tilde{\Lambda}_k\omega_{ik}^T = [\omega_{ik}, \tilde{\Lambda}_k]
+\end{equation}
+where $[\omega_{ik}, \tilde{\Lambda}_k] = \omega_{ik}\tilde{\Lambda}_k - \tilde{\Lambda}_k\omega_{ik}$ is the matrix commutator. (For $G = \mathrm{SO}(d)$, the antisymmetry $\omega^T = -\omega$ gives $\delta\tilde{\Lambda}_k = \omega_{ik}\tilde{\Lambda}_k + \tilde{\Lambda}_k\omega_{ik}^T = [\omega_{ik}, \tilde{\Lambda}_k]$.)
+
+%------------------------------------------------------------------------------
+\subsection{Variation of the Mass Matrix Under Connection Changes}
+%------------------------------------------------------------------------------
+
+\subsubsection{Diagonal Block Variation}
+
+\begin{equation}
+\delta[\mathbf{M}^\mu]_{ii} = \sum_k \beta_{ik} \, \delta\tilde{\Lambda}_{q_k} = \sum_k \beta_{ik} \, [\omega_{ik}, \tilde{\Lambda}_{q_k}]
+\end{equation}
+
+\subsubsection{Off-Diagonal Block Variation}
+
+\begin{align}
+\delta[\mathbf{M}^\mu]_{ik} &= -\beta_{ik} \, \delta(\Omega_{ik}\Lambda_{q_k}) - \beta_{ki} \, \delta(\Lambda_{q_i}\Omega_{ki}^T) \nonumber\\
+&= -\beta_{ik}\omega_{ik}\Omega_{ik}\Lambda_{q_k} - \beta_{ki}\Lambda_{q_i}(\omega_{ki}\Omega_{ki})^T \nonumber\\
+&= -\beta_{ik}\omega_{ik}\Omega_{ik}\Lambda_{q_k} - \beta_{ki}\Lambda_{q_i}\Omega_{ki}^T\omega_{ki}^T
+\end{align}
+
+For the $\mathrm{SO}(d)$ case, using $\omega_{ki}^T = -\omega_{ki}$:
+\begin{equation}
+\boxed{\delta[\mathbf{M}^\mu]_{ik} = -\beta_{ik}\omega_{ik}\Omega_{ik}\Lambda_{q_k} + \beta_{ki}\Lambda_{q_i}\Omega_{ki}^T\omega_{ki}}
+\end{equation}
+
+%------------------------------------------------------------------------------
+\subsection{Pullback Geometry}
+%------------------------------------------------------------------------------
+
+The \textbf{pullback} of the metric under a map $\phi: \mathcal{Q} \to \mathcal{Q}$ is central to understanding how geometry transforms under coordinate changes or symmetry actions.
+
+\subsubsection{Pullback of the Fisher-Rao Metric}
+
+Let $\phi_g: \mathcal{Q} \to \mathcal{Q}$ be the action of gauge transformation $g$:
+\begin{equation}
+\phi_g(\mu, \Sigma) = (g\mu, g\Sigma g^T)
+\end{equation}
+
+The pullback metric is:
+\begin{equation}
+(\phi_g^*\mathcal{G})_{(\mu,\Sigma)}(v, w) = \mathcal{G}_{\phi_g(\mu,\Sigma)}(d\phi_g \cdot v, d\phi_g \cdot w)
+\end{equation}
+
+For the Fisher-Rao metric, gauge invariance implies:
+\begin{equation}
+\boxed{\phi_g^*\mathcal{G} = \mathcal{G}}
+\end{equation}
+
+The metric is gauge-invariant representing the geometric content of our transformation laws.
+
+\subsubsection{Horizontal and Vertical Decomposition}
+
+The tangent space at each point decomposes as:
+\begin{equation}
+T_{(\mu,\Sigma)}\mathcal{Q} = H_{(\mu,\Sigma)} \oplus V_{(\mu,\Sigma)}
+\end{equation}
+
+The tangent space at each point splits into a \textbf{vertical space} $V$ consisting of directions along gauge orbits (pure gauge changes) and a \textbf{horizontal space} $H$ consisting of directions orthogonal to gauge orbits (physical changes). The connection determines the horizontal subspace. A vector $v = (\delta\mu, \delta\Sigma)$ is horizontal if:
+\begin{equation}
+\mathcal{G}(v, \xi_X) = 0 \quad \forall X \in \mathfrak{g}
+\end{equation}
+where $\xi_X$ is the vector field generated by $X$.
+
+\subsubsection{Gauge-Invariant Quantities}
+
+Only horizontal components of velocities and momenta correspond to observables. Key gauge-invariant quantities include the \textbf{consensus divergence} $\|\mu_i - \tilde{\mu}_k\|_{\tilde{\Lambda}_{q_k}}^2 = (\mu_i - \tilde{\mu}_k)^T\tilde{\Lambda}_{q_k}(\mu_i - \tilde{\mu}_k)$, the \textbf{free energy} $F[\{q_i\}]$ which is gauge-invariant by construction, the \textbf{Hamiltonian} $H = \frac{1}{2}\langle\pi, \mathbf{M}^{-1}\pi\rangle + F$, and the \textbf{inter-agent KL divergence} $\mathrm{KL}(q_i \| \Omega_{ik}\cdot q_k)$.
+
+
+%------------------------------------------------------------------------------
+\subsection{Summary: Gauge-Covariant Hamiltonian Mechanics}
+%------------------------------------------------------------------------------
+
+\begin{tcolorbox}[title=Gauge Transformation Laws]
+\textbf{Positions:}
+\begin{align}
+\mu_i' &= g_i\mu_i & \Sigma_i' &= g_i\Sigma_i g_i^T
+\end{align}
+
+\textbf{Momenta:}
+\begin{align}
+(\pi_i^\mu)' &= g_i\pi_i^\mu & (\Pi_i^\Sigma)' &= g_i\Pi_i^\Sigma g_i^T
+\end{align}
+
+\textbf{Mass Matrix:}
+\begin{equation}
+\mathbf{M}' = \mathbf{G}\mathbf{M}\mathbf{G}^T
+\end{equation}
+
+\textbf{Transport Operators:}
+\begin{equation}
+\Omega_{ik}' = g_i\Omega_{ik}g_k^{-1}
+\end{equation}
+
+\textbf{Hamilton's Equations:} Fully covariant under these transformations.
+
+\textbf{Observables:} Gauge-invariant quantities include $F$, $H$, and all inter-agent divergences.
+\end{tcolorbox}
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Appendix: Hamiltonian Mechanics on Statistical Manifolds
+% With Explicit Sensory Likelihood
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\section{Hamiltonian Mechanics on Statistical Manifolds}
+\label{app:hamiltonian}
+
+This appendix derives the complete mass matrix structure for multi-agent belief dynamics with explicit sensory evidence, demonstrating that inertial mass emerges as statistical precision. We work in the quasi-static approximation where prior parameters $(\bar{\mu}_i, \bar{\Sigma}_i)$ evolve slowly relative to beliefs $(\mu_i, \Sigma_i)$.
+
+%-----------------------------------------------------------------------
+\subsection{Setup and Notation}
+%-----------------------------------------------------------------------
+
+Each agent $i$ maintains a belief distribution $q_i = \mathcal{N}(\mu_i, \Sigma_i)$ anchored to a fixed prior $p_i = \mathcal{N}(\bar{\mu}_i, \bar{\Sigma}_i)$ and receives observations $o_i$ through a likelihood $p(o_i \mid \theta) = \mathcal{N}(o_i; \theta, \Sigma_{o_i})$. Define:
+%
+\begin{align}
+\Lambda_{q_i} &= \Sigma_i^{-1} & &\text{(belief precision)} \\
+\bar{\Lambda}_{p_i} &= \bar{\Sigma}_i^{-1} & &\text{(prior precision)} \\
+\Lambda_{o_i} &= \Sigma_{o_i}^{-1} & &\text{(observation precision)} \\
+\tilde{\mu}_k &= \Omega_{ik}\mu_k & &\text{(transported mean)} \\
+\tilde{\Lambda}_{q_k} &= \Omega_{ik}\Lambda_{q_k}\Omega_{ik}^T & &\text{(transported precision)}
+\end{align}
+%
+where $\Omega_{ik} \in G \subseteq \mathrm{GL}(d)$ is the gauge transport operator from agent $k$'s frame to agent $i$'s frame, given by $\Omega_{ik} = e^{\phi_i}e^{-\phi_k}$ with $\phi_i \in \mathfrak{g}$, the Lie algebra of $G$.
+
+%-----------------------------------------------------------------------
+\subsection{The Extended Free Energy Functional}
+%-----------------------------------------------------------------------
+
+The complete variational free energy with explicit sensory evidence is:
+%
+\begin{equation}
+\boxed{
+\mathcal{F}[\{q_i\}] = \sum_i D_{\mathrm{KL}}(q_i \| p_i) + \sum_{i,k} \beta_{ik} D_{\mathrm{KL}}(q_i \| \Omega_{ik}\cdot q_k) - \sum_i \mathbb{E}_{q_i}[\log p(o_i \mid \theta)]
+}
+\label{eq:full_free_energy}
+\end{equation}
+%
+The three terms represent, respectively, \textbf{prior anchoring} (deviation from internal world-model), \textbf{social consensus} (alignment with other agents via gauge-covariant transport), and \textbf{sensory evidence} (grounding in observations).
+
+%-----------------------------------------------------------------------
+\subsection{Component Free Energies for Gaussians}
+%-----------------------------------------------------------------------
+
+\subsubsection{KL Divergence Between Gaussians}
+
+For $q = \mathcal{N}(\mu_q, \Sigma_q)$ and $p = \mathcal{N}(\mu_p, \Sigma_p)$:
+%
+\begin{equation}
+D_{\mathrm{KL}}(q \| p) = \frac{1}{2}\left[\mathrm{tr}(\Sigma_p^{-1}\Sigma_q) + (\mu_p - \mu_q)^T\Sigma_p^{-1}(\mu_p - \mu_q) - d + \ln\frac{|\Sigma_p|}{|\Sigma_q|}\right]
+\label{eq:kl_gaussian}
+\end{equation}
+
+\subsubsection{Expected Log-Likelihood}
+
+For the Gaussian likelihood $p(o_i \mid \theta) = \mathcal{N}(o_i; \theta, \Sigma_{o_i})$:
+%
+\begin{align}
+\mathbb{E}_{q_i}[\log p(o_i \mid \theta)] &= -\frac{d}{2}\log(2\pi) - \frac{1}{2}\log|\Sigma_{o_i}| - \frac{1}{2}\mathbb{E}_{q_i}\left[(o_i - \theta)^T\Lambda_{o_i}(o_i - \theta)\right]
+\end{align}
+%
+The quadratic expectation evaluates to:
+%
+\begin{equation}
+\mathbb{E}_{q_i}\left[(o_i - \theta)^T\Lambda_{o_i}(o_i - \theta)\right] = (o_i - \mu_i)^T\Lambda_{o_i}(o_i - \mu_i) + \mathrm{tr}(\Lambda_{o_i}\Sigma_i)
+\end{equation}
+%
+Therefore:
+%
+\begin{equation}
+\boxed{
+-\mathbb{E}_{q_i}[\log p(o_i \mid \theta)] = \frac{1}{2}(o_i - \mu_i)^T\Lambda_{o_i}(o_i - \mu_i) + \frac{1}{2}\mathrm{tr}(\Lambda_{o_i}\Sigma_i) + \mathrm{const}
+}
+\label{eq:neg_log_likelihood}
+\end{equation}
+
+%-----------------------------------------------------------------------
+\subsection{First Variations (Gradient)}
+%-----------------------------------------------------------------------
+
+\subsubsection{Prior Term: $D_{\mathrm{KL}}(q_i \| p_i)$}
+
+\begin{align}
+\frac{\partial D_{\mathrm{KL}}(q_i \| p_i)}{\partial \mu_i} &= \bar{\Lambda}_{p_i}(\mu_i - \bar{\mu}_i) \label{eq:grad_prior_mu} \\[6pt]
+\frac{\partial D_{\mathrm{KL}}(q_i \| p_i)}{\partial \Sigma_i} &= \frac{1}{2}(\bar{\Lambda}_{p_i} - \Lambda_{q_i}) \label{eq:grad_prior_sigma}
+\end{align}
+
+\subsubsection{Consensus Term: $D_{\mathrm{KL}}(q_i \| \tilde{q}_k)$}
+
+With respect to receiver $i$:
+\begin{align}
+\frac{\partial D_{\mathrm{KL}}(q_i \| \tilde{q}_k)}{\partial \mu_i} &= \tilde{\Lambda}_{q_k}(\mu_i - \tilde{\mu}_k) \label{eq:grad_consensus_mu_i} \\[6pt]
+\frac{\partial D_{\mathrm{KL}}(q_i \| \tilde{q}_k)}{\partial \Sigma_i} &= \frac{1}{2}(\tilde{\Lambda}_{q_k} - \Lambda_{q_i}) \label{eq:grad_consensus_sigma_i}
+\end{align}
+
+With respect to sender $k$:
+\begin{align}
+\frac{\partial D_{\mathrm{KL}}(q_i \| \tilde{q}_k)}{\partial \mu_k} &= \Lambda_{q_k}\Omega_{ik}^T(\tilde{\mu}_k - \mu_i) \label{eq:grad_consensus_mu_k} \\[6pt]
+\frac{\partial D_{\mathrm{KL}}(q_i \| \tilde{q}_k)}{\partial \Sigma_k} &= \frac{1}{2}\Omega_{ik}^T\left[\tilde{\Lambda}_{q_k} - \tilde{\Lambda}_{q_k}\Sigma_i\tilde{\Lambda}_{q_k}\right]\Omega_{ik} \label{eq:grad_consensus_sigma_k}
+\end{align}
+
+\subsubsection{Sensory Term: $-\mathbb{E}_{q_i}[\log p(o_i \mid \theta)]$}
+
+\begin{align}
+\frac{\partial}{\partial \mu_i}\left[-\mathbb{E}_{q_i}[\log p(o_i \mid \theta)]\right] &= \Lambda_{o_i}(\mu_i - o_i) \label{eq:grad_sensory_mu} \\[6pt]
+\frac{\partial}{\partial \Sigma_i}\left[-\mathbb{E}_{q_i}[\log p(o_i \mid \theta)]\right] &= \frac{1}{2}\Lambda_{o_i} \label{eq:grad_sensory_sigma}
+\end{align}
+
+\subsubsection{Total Gradient}
+
+\begin{equation}
+\boxed{
+\frac{\partial \mathcal{F}}{\partial \mu_i} = \bar{\Lambda}_{p_i}(\mu_i - \bar{\mu}_i) + \sum_k \beta_{ik}\tilde{\Lambda}_{q_k}(\mu_i - \tilde{\mu}_k) + \sum_j \beta_{ji}\Lambda_{q_i}\Omega_{ji}^T(\tilde{\mu}_i^{(j)} - \mu_j) + \Lambda_{o_i}(\mu_i - o_i)
+}
+\label{eq:total_gradient_mu}
+\end{equation}
+%
+where $\tilde{\mu}_i^{(j)} = \Omega_{ji}\mu_i$ is agent $i$'s mean transported into agent $j$'s frame.
+
+\begin{equation}
+\boxed{
+\frac{\partial \mathcal{F}}{\partial \Sigma_i} = \frac{1}{2}(\bar{\Lambda}_{p_i} - \Lambda_{q_i}) + \sum_k \frac{\beta_{ik}}{2}(\tilde{\Lambda}_{q_k} - \Lambda_{q_i}) + \sum_j \frac{\beta_{ji}}{2}\Omega_{ji}^T\left[\tilde{\Lambda}_{qi}^{(j)} - \tilde{\Lambda}_{qi}^{(j)}\Sigma_j\tilde{\Lambda}_{qi}^{(j)}\right]\Omega_{ji} + \frac{1}{2}\Lambda_{o_i}
+}
+\label{eq:total_gradient_sigma}
+\end{equation}
+
+%-----------------------------------------------------------------------
+\subsection{Second Variations (Hessian = Mass Matrix)}
+%-----------------------------------------------------------------------
+
+The Hessian $\mathbf{M} = \partial^2\mathcal{F}/\partial\xi\partial\xi$ serves as the mass matrix. This is distinct from the intrinsic Fisher-Rao metric on the statistical manifold; it is a ``Hessian mass matrix'' whose curvature depends on the full free energy landscape including priors, sensory evidence, and social coupling.
+
+\subsubsection{Mean Sector: $\partial^2\mathcal{F}/\partial\mu\partial\mu^T$}
+
+\paragraph{Diagonal blocks $(i = k)$:}
+
+From prior:
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q_i \| p_i)}{\partial \mu_i \partial \mu_i^T} = \bar{\Lambda}_{p_i}
+\end{equation}
+
+From consensus (as receiver):
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q_i \| \tilde{q}_k)}{\partial \mu_i \partial \mu_i^T} = \tilde{\Lambda}_{q_k} = \Omega_{ik}\Lambda_{q_k}\Omega_{ik}^T
+\end{equation}
+
+From consensus (as sender to agent $j$):
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q_j \| \tilde{q}_i)}{\partial \mu_i \partial \mu_i^T} = \Omega_{ji}^T\tilde{\Lambda}_{qi}^{(j)}\Omega_{ji} = \Lambda_{q_i}
+\end{equation}
+
+From sensory evidence:
+\begin{equation}
+\frac{\partial^2}{\partial \mu_i \partial \mu_i^T}\left[-\mathbb{E}_{q_i}[\log p(o_i \mid \theta)]\right] = \Lambda_{o_i}
+\end{equation}
+
+\textbf{Total diagonal mass:}
+\begin{equation}
+\boxed{
+[\mathbf{M}^\mu]_{ii} = \underbrace{\bar{\Lambda}_{p_i}}_{\text{prior}} + \underbrace{\sum_k \beta_{ik}\tilde{\Lambda}_{q_k}}_{\text{incoming social}} + \underbrace{\sum_j \beta_{ji}\Lambda_{q_i}}_{\text{outgoing recoil}} + \underbrace{\Lambda_{o_i}}_{\text{sensory}}
+}
+\label{eq:mass_diagonal}
+\end{equation}
+
+\paragraph{Off-diagonal blocks $(i \neq k)$:}
+
+From $D_{\mathrm{KL}}(q_i \| \tilde{q}_k)$:
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q_i \| \tilde{q}_k)}{\partial \mu_i \partial \mu_k^T} = -\tilde{\Lambda}_{q_k}\Omega_{ik} = -\Omega_{ik}\Lambda_{q_k}
+\end{equation}
+
+From $D_{\mathrm{KL}}(q_k \| \tilde{q}_i)$ (if $k$ also listens to $i$):
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q_k \| \tilde{q}_i)}{\partial \mu_i \partial \mu_k^T} = -\Lambda_{q_i}\Omega_{ki}^T
+\end{equation}
+
+The sensory term does not couple different agents. Therefore:
+\begin{equation}
+\boxed{
+[\mathbf{M}^\mu]_{ik} = -\beta_{ik}\Omega_{ik}\Lambda_{q_k} - \beta_{ki}\Lambda_{q_i}\Omega_{ki}^T \quad (i \neq k)
+}
+\label{eq:mass_offdiagonal}
+\end{equation}
+
+
+By Schwarz's theorem, this Hessian is symmetric: one can verify that $[\mathbf{M}^\mu]_{ik} = ([\mathbf{M}^\mu]_{ki})^T$ holds for any $\beta_{ik}$ and $\Omega_{ik}$.
+
+
+%-----------------------------------------------------------------------
+\subsubsection{Covariance Sector: $\partial^2\mathcal{F}/\partial\Sigma\partial\Sigma$}
+%-----------------------------------------------------------------------
+
+For matrix-valued variables, we use the directional derivative convention:
+\begin{equation}
+\frac{\partial^2 f}{\partial \Sigma \partial \Sigma}[V, W] = \lim_{\epsilon \to 0} \frac{1}{\epsilon}\left(\left.\frac{\partial f}{\partial \Sigma}\right|_{\Sigma + \epsilon W} - \left.\frac{\partial f}{\partial \Sigma}\right|_{\Sigma}\right)[V]
+\end{equation}
+
+\paragraph{Key identity:}
+\begin{equation}
+\frac{\partial}{\partial \Sigma}(\Sigma^{-1}) = -\Sigma^{-1} \otimes \Sigma^{-1}
+\end{equation}
+
+\paragraph{Diagonal blocks $(i = k)$:}
+
+From prior:
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q_i \| p_i)}{\partial \Sigma_i \partial \Sigma_i}[V, W] = \frac{1}{2}\mathrm{tr}\left[\Lambda_{q_i}V\Lambda_{q_i}W\right]
+\end{equation}
+
+In tensor notation:
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q_i \| p_i)}{\partial \Sigma_i \partial \Sigma_i} = \frac{1}{2}(\Lambda_{q_i} \otimes \Lambda_{q_i})
+\end{equation}
+
+From consensus (as receiver and sender), identical contributions arise.
+
+\textbf{Critical observation:} The sensory term $\frac{1}{2}\mathrm{tr}(\Lambda_{o_i}\Sigma_i)$ is \textit{linear} in $\Sigma_i$, so its second derivative \textbf{vanishes}:
+\begin{equation}
+\frac{\partial^2}{\partial \Sigma_i \partial \Sigma_i}\left[\mathrm{tr}(\Lambda_{o_i}\Sigma_i)\right] = 0
+\end{equation}
+
+Therefore:
+\begin{equation}
+\boxed{
+[\mathbf{M}^\Sigma]_{ii} = \frac{1}{2}(\Lambda_{q_i} \otimes \Lambda_{q_i}) \cdot \left(1 + \sum_k \beta_{ik} + \sum_j \beta_{ji}\right)
+}
+\label{eq:mass_covariance}
+\end{equation}
+
+The sensory precision $\Lambda_{o_i}$ does \textbf{not} contribute to the covariance-sector mass.
+
+%-----------------------------------------------------------------------
+\subsubsection{Mean-Covariance Cross Blocks}
+%-----------------------------------------------------------------------
+
+\paragraph{Prior term:}
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q_i \| p_i)}{\partial \mu_i \partial \Sigma_i} = 0
+\end{equation}
+
+\paragraph{Sensory term:} The sensory free energy decomposes into a component quadratic in $\mu_i$, namely $(o_i - \mu_i)^T\Lambda_{o_i}(o_i - \mu_i)$, and a component linear in $\Sigma_i$, namely $\mathrm{tr}(\Lambda_{o_i}\Sigma_i)$. These are independent, so:
+\begin{equation}
+[\mathbf{C}^{\mu\Sigma}]_{ii}^{\text{sensory}} = 0
+\end{equation}
+
+\paragraph{Consensus (cross-agent):} From $\partial D_{\mathrm{KL}}(q_i \| \tilde{q}_k)/\partial \mu_i = \tilde{\Lambda}_{q_k}(\mu_i - \tilde{\mu}_k)$, varying $\Sigma_k$:
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q_i \| \tilde{q}_k)}{\partial \mu_i \partial \Sigma_k}[V] = -\Omega_{ik}\Lambda_{q_k}V\Lambda_{q_k}\Omega_{ik}^T(\mu_i - \tilde{\mu}_k)
+\end{equation}
+
+This vanishes at consensus ($\mu_i = \tilde{\mu}_k$):
+\begin{equation}
+[\mathbf{C}^{\mu\Sigma}]_{ik} = 0 \quad \text{when } \mu_i = \tilde{\mu}_k
+\end{equation}
+
+%-----------------------------------------------------------------------
+\subsection{Complete Mass Matrix Assembly}
+%-----------------------------------------------------------------------
+
+The full state vector is $\xi = (\mu_1, \ldots, \mu_N, \Sigma_1, \ldots, \Sigma_N)$.
+
+\subsubsection{Block Structure}
+
+\begin{equation}
+\mathbf{M} = \begin{pmatrix} \mathbf{M}^\mu & \mathbf{C}^{\mu\Sigma} \\ (\mathbf{C}^{\mu\Sigma})^T & \mathbf{M}^\Sigma \end{pmatrix}
+\end{equation}
+where each block is an $N \times N$ matrix of sub-blocks.
+
+\subsubsection{Explicit Formulae}
+
+\paragraph{Mean sector diagonal:}
+\begin{equation}
+[\mathbf{M}^\mu]_{ii} = \underbrace{\bar{\Lambda}_{p_i}}_{\text{prior anchoring}} + \underbrace{\sum_k \beta_{ik}\Omega_{ik}\Lambda_{q_k}\Omega_{ik}^T}_{\text{incoming consensus}} + \underbrace{\sum_j \beta_{ji}\Lambda_{q_i}}_{\text{outgoing recoil}} + \underbrace{\Lambda_{o_i}}_{\text{sensory grounding}}
+\label{eq:mass_full_diagonal}
+\end{equation}
+
+\paragraph{Mean sector off-diagonal:}
+\begin{equation}
+[\mathbf{M}^\mu]_{ik} = -\beta_{ik}\Omega_{ik}\Lambda_{q_k} - \beta_{ki}\Lambda_{q_i}\Omega_{ki}^T \quad (i \neq k)
+\end{equation}
+
+\paragraph{Covariance sector diagonal:}
+\begin{equation}
+[\mathbf{M}^\Sigma]_{ii} = \frac{1}{2}(\Lambda_{q_i} \otimes \Lambda_{q_i}) \cdot \left(1 + \sum_k \beta_{ik} + \sum_j \beta_{ji}\right)
+\end{equation}
+
+\paragraph{Cross mean-covariance (at consensus):}
+\begin{equation}
+[\mathbf{C}^{\mu\Sigma}]_{ik} = 0 \quad \text{when } \mu_i = \tilde{\mu}_k
+\end{equation}
+
+%-----------------------------------------------------------------------
+\subsection{Interpretation}
+%-----------------------------------------------------------------------
+
+\subsubsection{Mass as Precision}
+
+The mean-sector effective mass for agent $i$ is:
+\begin{equation}
+\boxed{
+M_i = \bar{\Lambda}_{p_i} + \sum_k \beta_{ik}\tilde{\Lambda}_{q_k} + \sum_j \beta_{ji}\Lambda_{q_i} + \Lambda_{o_i}
+}
+\label{eq:effective_mass}
+\end{equation}
+
+The term $\bar{\Lambda}_{p_i}$ represents \textbf{bare mass}, providing inertia against deviation from the prior. The term $\sum_k \beta_{ik}\tilde{\Lambda}_{q_k}$ represents \textbf{incoming relational mass}, the inertia from being "pulled" by neighbors. The term $\sum_j \beta_{ji}\Lambda_{q_i}$ represents \textbf{outgoing relational mass}, the inertia from "pulling" neighbors (recoil). Finally, $\Lambda_{o_i}$ represents \textbf{sensory mass}, the inertia from grounding in observations.
+
+\subsubsection{Asymmetry of Sensory Contribution}
+
+The sensory precision $\Lambda_{o_i}$ contributes to the mean-sector mass (Eq.~\ref{eq:mass_full_diagonal}) and the mean-sector force (Eq.~\ref{eq:total_gradient_mu}), but not to the covariance-sector mass (Eq.~\ref{eq:mass_covariance}). This asymmetry arises because the sensory term is quadratic in $\mu$ but only linear in $\Sigma$.
+
+\subsubsection{Kinetic Energy}
+
+\begin{equation}
+T = \frac{1}{2}\dot{\mu}^T\mathbf{M}^\mu\dot{\mu} + \frac{1}{2}\mathrm{tr}\left[\mathbf{M}^\Sigma[\dot{\Sigma}, \dot{\Sigma}]\right]
+\end{equation}
+
+The first term gives standard kinetic energy with precision-mass. The second gives "shape" kinetic energy on the SPD manifold; the metric $(\Lambda \otimes \Lambda)$ corresponds to the affine-invariant metric on the cone of symmetric positive-definite matrices.
+
+%-----------------------------------------------------------------------
+\subsection{The Hamiltonian}
+%-----------------------------------------------------------------------
+
+With conjugate momenta $\pi = (\pi^\mu, \Pi^\Sigma)$ and Hamiltonian:
+\begin{equation}
+\boxed{
+H = \frac{1}{2}\langle\pi, \mathbf{M}^{-1}\pi\rangle + \mathcal{F}[\xi]
+}
+\label{eq:hamiltonian}
+\end{equation}
+
+%-----------------------------------------------------------------------
+\subsection{Hamilton's Equations}
+%-----------------------------------------------------------------------
+
+\subsubsection{Equations of Motion}
+
+\begin{align}
+\dot{\mu}_i &= \sum_k [\mathbf{M}^{-1}]_{ik}^{\mu\mu}\pi_k^\mu + \sum_k [\mathbf{M}^{-1}]_{ik}^{\mu\Sigma}\Pi_k^\Sigma \label{eq:hamilton_mu} \\[6pt]
+\dot{\Sigma}_i &= \sum_k [\mathbf{M}^{-1}]_{ik}^{\Sigma\mu}\pi_k^\mu + \sum_k [\mathbf{M}^{-1}]_{ik}^{\Sigma\Sigma}\Pi_k^\Sigma \label{eq:hamilton_sigma} \\[6pt]
+\dot{\pi}_i^\mu &= -\frac{\partial \mathcal{F}}{\partial \mu_i} - \frac{1}{2}\pi^T\frac{\partial \mathbf{M}^{-1}}{\partial \mu_i}\pi \label{eq:hamilton_pi_mu} \\[6pt]
+\dot{\Pi}_i^\Sigma &= -\frac{\partial \mathcal{F}}{\partial \Sigma_i} - \frac{1}{2}\pi^T\frac{\partial \mathbf{M}^{-1}}{\partial \Sigma_i}\pi \label{eq:hamilton_pi_sigma}
+\end{align}
+
+\subsubsection{Force Decomposition}
+
+The potential forces decompose into four distinct contributions:
+\begin{equation}
+\boxed{
+-\frac{\partial \mathcal{F}}{\partial \mu_i} = \underbrace{-\bar{\Lambda}_{p_i}(\mu_i - \bar{\mu}_i)}_{\text{prior restoring}} \underbrace{- \sum_k \beta_{ik}\tilde{\Lambda}_{q_k}(\mu_i - \tilde{\mu}_k)}_{\text{consensus}} \underbrace{- \sum_j \beta_{ji}\Lambda_{q_i}\Omega_{ji}^T(\tilde{\mu}_i^{(j)} - \mu_j)}_{\text{reciprocal}} \underbrace{- \Lambda_{o_i}(\mu_i - o_i)}_{\text{sensory evidence}}
+}
+\label{eq:force_decomposition}
+\end{equation}
+
+The geodesic force $f_i^{\text{geo}} = -\frac{1}{2}\sum_{jkl}(\pi_j^\mu)^T\frac{\partial[\mathbf{M}^{-1}]_{jk}^{\mu\mu}}{\partial \mu_i}\pi_k^\mu$ encodes manifold curvature.
+
+\subsubsection{Compact Form}
+
+\begin{equation}
+\boxed{
+\begin{aligned}
+\dot{\xi} &= \mathbf{M}^{-1}\pi \\
+\dot{\pi} &= -\nabla\mathcal{F} - \frac{1}{2}\nabla_\xi\langle\pi, \mathbf{M}^{-1}\pi\rangle
+\end{aligned}
+}
+\end{equation}
+
+Since $\mathbf{M}$ depends on $\Sigma$, the Hamiltonian is non-separable, requiring implicit or splitting methods for symplectic integration.
+
+%-----------------------------------------------------------------------
+\subsection{Damped Dynamics}
+%-----------------------------------------------------------------------
+
+Including dissipation yields:
+\begin{equation}
+M_i\ddot{\mu}_i + \gamma_i\dot{\mu}_i + \nabla_{\mu_i}\mathcal{F} = 0
+\label{eq:damped_dynamics}
+\end{equation}
+
+For small displacements from equilibrium with stiffness $K_i = \nabla^2\mathcal{F}|_{\mu^*}$:
+\begin{equation}
+M_i\ddot{\delta\mu} + \gamma_i\dot{\delta\mu} + K_i\delta\mu = 0
+\end{equation}
+
+The discriminant $\Delta = \gamma_i^2 - 4K_iM_i$ determines three regimes: the \textbf{overdamped} regime ($\Delta > 0$) exhibits monotonic decay corresponding to standard Bayesian updating; the \textbf{critically damped} regime ($\Delta = 0$) achieves fastest equilibration; and the \textbf{underdamped} regime ($\Delta < 0$) exhibits oscillatory approach with overshooting.
+
+%-----------------------------------------------------------------------
+\subsection{Momentum Current with Sensory Coupling}
+%-----------------------------------------------------------------------
+
+Between agents, the momentum current is:
+\begin{equation}
+J_{k \to i} = \beta_{ik}\tilde{\Lambda}_{q_k}(\tilde{\mu}_k - \mu_i)
+\end{equation}
+
+The continuity equation becomes:
+\begin{equation}
+\dot{\pi}_i + \gamma_i\dot{\mu}_i + \bar{\Lambda}_{p_i}(\mu_i - \bar{\mu}_i) + \Lambda_{o_i}(\mu_i - o_i) = \sum_k J_{k \to i}
+\end{equation}
+
+The sensory term $\Lambda_{o_i}(\mu_i - o_i)$ acts as an additional ``anchoring force'' that grounds the agent in observations, distinct from the social momentum currents.
+
+%-----------------------------------------------------------------------
+\subsection{Summary}
+%-----------------------------------------------------------------------
+
+\begin{tcolorbox}[colback=gray!5,colframe=gray!75,title=The Complete Theory with Sensory Evidence]
+
+\textbf{State:} Each agent $i$ has belief $q_i = \mathcal{N}(\mu_i, \Sigma_i)$ with fixed prior $p_i = \mathcal{N}(\bar{\mu}_i, \bar{\Sigma}_i)$ and observations $o_i$ with precision $\Lambda_{o_i}$.
+
+\textbf{Free Energy:}
+\begin{equation}
+\mathcal{F} = \sum_i D_{\mathrm{KL}}(q_i \| p_i) + \sum_{i,k} \beta_{ik} D_{\mathrm{KL}}(q_i \| \Omega_{ik}\cdot q_k) - \sum_i \mathbb{E}_{q_i}[\log p(o_i \mid \theta)]
+\end{equation}
+
+\textbf{Mass Matrix:}
+\begin{equation}
+\mathbf{M} = \frac{\partial^2 \mathcal{F}}{\partial \xi \partial \xi} = \text{Hessian of free energy} = \text{Precision}
+\end{equation}
+
+\textbf{Effective Mass:}
+\begin{equation}
+M_i = \bar{\Lambda}_{p_i} + \sum_k \beta_{ik}\tilde{\Lambda}_{q_k} + \sum_j \beta_{ji}\Lambda_{q_i} + \Lambda_{o_i}
+\end{equation}
+
+\textbf{Dynamics:}
+\begin{equation}
+\dot{\xi} = \mathbf{M}^{-1}\pi, \qquad \dot{\pi} = -\nabla\mathcal{F} - \frac{1}{2}\nabla_\xi\langle\pi, \mathbf{M}^{-1}\pi\rangle
+\end{equation}
+
+\textbf{Interpretation:} Position $\mu_i$ represents what agent $i$ believes; momentum $\pi_i$ represents the rate of belief change times precision; mass equals precision (tight beliefs are heavy); and force represents the pull toward prior, consensus, and observations.
+
+\end{tcolorbox}
+
+%==============================================================================
+% APPENDIX: DERIVATION OF SOFTMAX ATTENTION FROM MAXIMUM ENTROPY
+%==============================================================================
+
+\section{Derivation of Softmax Attention from Maximum Entropy}
+\label{app:softmax}
+
+The softmax attention weights $\beta_{ij}$ are not arbitrary but emerge from a principled maximum entropy argument. We seek attention weights that satisfy a constraint on expected dissimilarity while being maximally uncertain otherwise.
+
+\subsection{The Maximum Entropy Problem}
+
+For agent $i$, let $\beta_{ij}$ denote the attention weight assigned to neighbor $j$, subject to the constraint $\sum_j \beta_{ij} = 1$. We seek the distribution over attention that maximizes entropy subject to a constraint on expected belief dissimilarity:
+\begin{equation}
+\max_{\{\beta_{ij}\}} \left[ -\sum_j \beta_{ij} \log \beta_{ij} \right] \quad \text{subject to} \quad \sum_j \beta_{ij} \, d_{ij}^2 = C_i, \quad \sum_j \beta_{ij} = 1
+\end{equation}
+where $d_{ij}^2 = \|\mu_i - \mu_j\|^2_{\Lambda}$ is the precision-weighted squared distance between beliefs.
+
+\subsection{Lagrangian Solution}
+
+Introducing Lagrange multipliers $\lambda$ and $\nu$, the Lagrangian is:
+\begin{equation}
+\mathcal{L} = -\sum_j \beta_{ij} \log \beta_{ij} - \lambda \left(\sum_j \beta_{ij} d_{ij}^2 - C_i\right) - \nu \left(\sum_j \beta_{ij} - 1\right)
+\end{equation}
+
+Taking the derivative with respect to $\beta_{ik}$ and setting it to zero:
+\begin{equation}
+\frac{\partial \mathcal{L}}{\partial \beta_{ik}} = -\log \beta_{ik} - 1 - \lambda d_{ik}^2 - \nu = 0
+\end{equation}
+
+Solving for $\beta_{ik}$:
+\begin{equation}
+\beta_{ik} = \exp\left(-1 - \nu - \lambda d_{ik}^2\right) = \frac{\exp(-\lambda d_{ik}^2)}{Z_i}
+\end{equation}
+where $Z_i = \sum_j \exp(-\lambda d_{ij}^2)$ is the normalizing partition function determined by the constraint $\sum_j \beta_{ij} = 1$.
+
+\subsection{Interpretation}
+
+The result is exactly the softmax (or Gibbs/Boltzmann) distribution over attention:
+\begin{equation}
+\boxed{\beta_{ij} = \frac{\exp(-d_{ij}^2 / \kappa)}{\sum_k \exp(-d_{ik}^2 / \kappa)}}
+\end{equation}
+where $\kappa = 1/\lambda$ is an "attention temperature" controlling how sharply attention concentrates on similar neighbors. In the limit $\kappa \to 0$, attention becomes deterministic (winner-take-all), while $\kappa \to \infty$ yields uniform attention regardless of similarity. This derivation shows that softmax attention is not merely a convenient mathematical choice but the unique solution that maximizes entropy subject to a constraint on expected dissimilarity. The same principle underlies the Boltzmann distribution in statistical mechanics and the exponential family in statistics.
+
+%==============================================================================
+% APPENDIX: WHY FORWARD KL DIVERGENCE
+%==============================================================================
+
+\section{Why Forward KL Divergence?}
+\label{app:forward_kl}
+
+A natural question arises: why use the forward KL divergence $D_{\mathrm{KL}}(q_i \| \Omega_{ik}\cdot q_k)$ rather than the reverse $D_{\mathrm{KL}}(\Omega_{ik}\cdot q_k \| q_i)$ in the social coupling term? This appendix provides both intuitive and formal justifications.
+
+\subsection{Intuitive Argument: Zero-Forcing vs.\ Mean-Seeking}
+
+The forward KL $D_{\mathrm{KL}}(q \| p)$ is called "mean-seeking" or "moment-matching" in that it penalizes $q$ for placing probability mass where $p$ has little probability mass, encouraging $q$ to cover the support of $p$. The reverse KL $D_{\mathrm{KL}}(p \| q)$ is called "mode-seeking" or "zero-forcing" in that it penalizes $q$ for failing to place probability mass where $p$ has probability mass, encouraging $q$ to concentrate on modes of $p$.
+
+For social influence, the forward direction is more natural. Agent $i$ should be penalized for holding beliefs that disagree with transported neighbor beliefs, regardless of how uncertain those neighbors are. The forward KL achieves this: if agent $i$ is certain about something that neighbor $k$ (in $i$'s frame) considers unlikely, $i$ pays a high cost.
+
+\subsection{Formal Uniqueness Argument}
+
+Consider the general family of $f$-divergences $D_f(q \| p) = \int p(x) f(q(x)/p(x)) dx$ for convex $f$ with $f(1) = 0$. We seek divergences satisfying the following desiderata for social coupling:
+
+\paragraph{Desideratum 1: Convexity in $q$.} The coupling term should be convex in agent $i$'s belief $q_i$, ensuring a well-defined optimization landscape. All $f$-divergences satisfy this when the first argument varies.
+
+\paragraph{Desideratum 2: Additivity under transport.} Under the gauge transport $\Omega_{ik}$, the divergence should decompose sensibly. For Gaussians, this requires the divergence to depend on beliefs only through sufficient statistics $(\mu, \Sigma)$.
+
+\paragraph{Desideratum 3: Fisher information as Hessian.} The Hessian of the coupling term at $q_i = \Omega_{ik}\cdot q_k$ should recover the Fisher information metric, ensuring consistency with the mass interpretation. Only the forward KL satisfies this: for $D_{\mathrm{KL}}(q \| p)$, we have $\nabla^2_q D_{\mathrm{KL}}(q \| p)\big|_{q=p} = \mathcal{I}_p$, the Fisher information at $p$.
+
+The reverse KL has Hessian $\nabla^2_q D_{\mathrm{KL}}(p \| q)\big|_{q=p} = \mathcal{I}_p$ as well, but crucially, it is not convex in $q$ globally---only locally near $q = p$. This makes the reverse KL unsuitable for the free energy minimization framework, as it can create spurious local minima.
+
+\subsection{Connection to Variational Inference}
+
+In variational inference, the forward KL $D_{\mathrm{KL}}(q \| p)$ is the natural objective when $q$ is the variational approximation and $p$ is the target. Minimizing this drives $q$ toward $p$ in an information-theoretic sense. Our social coupling term $D_{\mathrm{KL}}(q_i \| \Omega_{ik}\cdot q_k)$ follows this convention: agent $i$'s belief $q_i$ is driven toward the transported neighbor belief $\Omega_{ik}\cdot q_k$. The reverse direction would have neighbors' beliefs driving toward agent $i$, inverting the causal structure of social influence.
+
+%==============================================================================
+% APPENDIX: DERIVATION OF SOCIAL COUPLING FROM NORMALIZED GENERATIVE MODEL
+%==============================================================================
+
+\section{Derivation of Social Coupling from Mixture-of-Sources Generative Model}
+\label{app:social_coupling}
+
+The social coupling term $\sum_{i,k} \beta_{ik} D_{\mathrm{KL}}(q_i \| \Omega_{ik}\cdot q_k)$ in our free energy is not an ad hoc regularizer but emerges from a mixture-of-sources generative model with gauge-transported components. This derivation, adapted from the $\mathrm{GL}(K)$ attention framework \citep{Dennis2025}, establishes the coupling as posterior inference over which neighboring agent generated the focal agent's latent state.
+
+\subsection{Mixture-of-Sources Generative Model}
+
+Agent $i$ seeks to update its belief $q_i(c)$ by attending to a set of source agents $j$. Agent $i$'s generative model assumes its latent state $c$ was drawn from one of the neighboring agents, selected by a categorical latent variable $z \in \{1, \ldots, N\}$:
+
+\begin{equation}
+P(c, z) = P(c \mid z)\, P(z),
+\label{eq:mixture_joint}
+\end{equation}
+
+where $P(z = j) = \pi_j$ is the prior probability of attending to agent $j$ (the attention prior), and $P(c \mid z = j) = \mathcal{N}(c;\, \Omega_{ij}\mu_j,\, \Omega_{ij}\Sigma_j\Omega_{ij}^\top)$ is agent $j$'s belief transported into agent $i$'s gauge frame via the transport operator $\Omega_{ij} \in G$, where $G$ is the gauge group (see below).
+
+This construction is consistent with the gauge structure developed in the main text. Agent $j$'s belief $q_j(c_j)$ lives in $j$'s local frame, and $\Omega_{ij} \cdot q_j$ is agent $i$'s representation of what agent $j$ believes, as seen from $i$'s reference frame. The categorical variable $z$ endows the model with probabilistic source selection: attention is posterior inference over which neighbor generated agent $i$'s state.
+
+The component distributions $P(c \mid z{=}j) = \Omega_{ij} \cdot q_j$ depend on the variational posteriors $q_j$ of other agents. This can be understood as an augmented model where the full system has a joint generative model over all agents' latent states, and the pairwise KL terms emerge as variational couplings in the mean-field decomposition of the joint ELBO. At the fixed point of the joint optimization over all $\{q_i\}$ simultaneously, the pairwise objectives are mutually consistent.
+
+\subsection{Variational Posterior and Alignment Free Energy}
+
+We approximate the true posterior $P(c, z \mid \text{data})$ using mean-field factorization:
+
+\begin{equation}
+Q(c, z) = q_i(c) \cdot \beta(z),
+\end{equation}
+
+where $\beta(z = j) \equiv \beta_{ij} \geq 0$ are variational attention weights satisfying $\sum_j \beta_{ij} = 1$.
+
+The alignment free energy is the KL divergence between the variational posterior and the generative model:
+
+\begin{equation}
+\mathcal{F}_{\text{align}} = D_{\mathrm{KL}}[Q(c,z) \| P(c,z)] = \sum_j \beta_{ij} \int dc\, q_i(c) \log \frac{q_i(c)\, \beta_{ij}}{P(c \mid z{=}j)\, \pi_j}.
+\end{equation}
+
+Decomposing the logarithm yields:
+
+\begin{equation}
+\mathcal{F}_{\text{align}} = \sum_j \beta_{ij} \left[ \underbrace{\int dc\, q_i(c) \log \frac{q_i(c)}{P(c \mid z{=}j)}}_{= \, D_{\mathrm{KL}}[q_i \,\|\, \Omega_{ij} q_j]} + \log \beta_{ij} - \log \pi_j \right].
+\label{eq:mixture_free_energy}
+\end{equation}
+
+The identification of the integral with $D_{\mathrm{KL}}[q_i \| \Omega_{ij} q_j]$ follows directly from the definition of KL divergence and the generative model $P(c \mid z{=}j) = (\Omega_{ij} q_j)(c)$, with no approximation.
+
+Defining an alignment energy $E_{ij} \equiv D_{\mathrm{KL}}[q_i \| \Omega_{ij} q_j]$:
+
+\begin{equation}
+\mathcal{F}_{\text{align}} = \sum_j \beta_{ij} \big( E_{ij} + \log \beta_{ij} - \log \pi_j \big).
+\end{equation}
+
+This has the standard ``energy minus entropy'' form $\mathcal{F}_{\text{align}} = \langle E \rangle_\beta - H(\beta) + \text{const}$, where $H(\beta) = -\sum_j \beta_{ij} \log \beta_{ij}$ is the entropy of the attention distribution.
+
+\subsection{Minimization and the Softmax Solution}
+
+Minimizing $\mathcal{F}_{\text{align}}$ with respect to $\beta_{ij}$ subject to the constraint $\sum_j \beta_{ij} = 1$ via Lagrange multipliers yields:
+
+\begin{equation}
+E_{ik} + \log \beta_{ik} + 1 - \log \pi_k - \lambda = 0.
+\end{equation}
+
+Solving and normalizing produces the softmax form weighted by attention priors $\pi_k$:
+
+\begin{equation}
+\beta_{ik} = \frac{\pi_k \exp(-E_{ik})}{\sum_m \pi_m \exp(-E_{im})}.
+\label{eq:mixture_softmax_general}
+\end{equation}
+
+For a uniform attention prior $\pi_k = 1/N$, the prior factors cancel, yielding:
+
+\begin{equation}
+\boxed{\beta_{ik} = \operatorname{softmax}_k(-E_{ik}) = \operatorname{softmax}_k\!\big(-D_{\mathrm{KL}}[q_i \| \Omega_{ik} q_k]\big).}
+\label{eq:mixture_softmax}
+\end{equation}
+
+Including a temperature parameter $\tau > 0$ by rescaling $E_{ik} \to E_{ik}/\tau$ recovers the attention weights used throughout this paper.
+
+\subsection{Non-Uniform Priors: Masking and Causal Structure}
+
+The general solution \eqref{eq:mixture_softmax_general} with non-uniform priors $\pi_k$ provides a principled mechanism for several architectural features. Setting $\pi_j = 0$ for certain agents implements hard masking (causal structure in temporal networks, preventing influence from future agents). Log-linear priors $\log \pi_j \propto f(i,j)$ implement soft positional or relational biases. This unifies masking, positional encoding, and attention biases as prior structure on the source-selection variable $z$.
+
+\subsection{The Complete Free Energy}
+
+Combining the alignment free energy (at its $\beta$-optimal point) with the prior anchoring and sensory evidence terms, the total variational free energy takes the form used throughout this paper:
+
+\begin{equation}
+\boxed{
+\mathcal{F}[\{q_i\}] = \sum_i D_{\mathrm{KL}}(q_i \| p_i) + \sum_{i,k} \beta_{ik} D_{\mathrm{KL}}(q_i \| \Omega_{ik}\cdot q_k) - \sum_i \mathbb{E}_{q_i}[\log p(o_i \mid c_i)]
+}
+\end{equation}
+
+This derivation establishes several key points. First, the KL-based social coupling emerges from posterior inference in a mixture-of-sources generative model, not from ad hoc regularization. Second, the attention weights $\beta_{ik}$ are the variational posterior over source identity, with a clear probabilistic interpretation. Third, the forward KL direction arises naturally: agent $i$'s belief $q_i$ is compared against each transported source belief $\Omega_{ik} q_k$, and the softmax selects the most compatible sources. Fourth, the gauge transport operators $\Omega_{ik}$ enter through the generative model's component distributions, ensuring gauge covariance by construction. Fifth, the derivation holds for any gauge group $G$ acting on the belief space---including $\mathrm{GL}(K)$, $\mathrm{SO}(d)$, or any subgroup---since KL divergence is invariant under invertible linear transformations of the sufficient statistics.
+
+
+%==============================================================================
+% APPENDIX: GENERALIZATION BEYOND GAUSSIAN BELIEFS
+%==============================================================================
+
+\section{Generalization Beyond Gaussian Beliefs}
+\label{app:exponential_family}
+
+The Gaussian assumption, while analytically convenient, restricts the theory to unimodal beliefs with elliptical uncertainty. This appendix outlines how the framework extends to exponential family distributions and discusses the challenges of fully general distributions.
+
+\subsection{Exponential Family Formulation}
+
+An exponential family distribution takes the form:
+\begin{equation}
+p(x \mid \theta) = h(x) \exp\left[\theta^T T(x) - A(\theta)\right]
+\end{equation}
+where $\theta \in \mathbb{R}^k$ are natural parameters, $T(x)$ are sufficient statistics, and $A(\theta)$ is the log-partition function ensuring normalization.
+
+\subsubsection{Fisher Information as Mass}
+
+The Fisher information matrix for exponential families has the elegant form:
+\begin{equation}
+\mathcal{I}(\theta) = \nabla^2 A(\theta) = \mathrm{Cov}_{p(\cdot|\theta)}[T(x)]
+\end{equation}
+
+This is the Hessian of the log-partition function, equivalently the covariance of sufficient statistics. Our identification of mass with Fisher information thus generalizes immediately:
+\begin{equation}
+\boxed{M_i = \nabla^2 A(\theta_i) = \mathcal{I}(\theta_i)}
+\end{equation}
+
+For Gaussians with natural parameters $\theta = (\Sigma^{-1}\mu, -\frac{1}{2}\Sigma^{-1})$, this recovers $M = \Lambda$ (precision) in the mean sector.
+
+\subsubsection{KL Divergence Structure}
+
+For exponential families, the KL divergence takes the Bregman divergence form:
+\begin{equation}
+D_{\mathrm{KL}}(q \| p) = A(\theta_p) - A(\theta_q) - \nabla A(\theta_q)^T(\theta_p - \theta_q)
+\end{equation}
+
+The Hessian of this with respect to $\theta_q$ yields:
+\begin{equation}
+\frac{\partial^2 D_{\mathrm{KL}}(q \| p)}{\partial \theta_q \partial \theta_q^T} = \nabla^2 A(\theta_q) = \mathcal{I}(\theta_q)
+\end{equation}
+
+Thus the mass-as-Fisher-information identification holds for all exponential families.
+
+\subsection{Multi-Modal Beliefs: Mixture Models}
+
+Real beliefs are often multi-modal, representing hypothesis competition or attitude ambivalence. Gaussian mixtures provide a tractable extension:
+\begin{equation}
+q(x) = \sum_{m=1}^M w_m \mathcal{N}(x; \mu_m, \Sigma_m), \quad \sum_m w_m = 1
+\end{equation}
+
+\subsubsection{Extended State Space}
+
+The state space becomes $\xi = (\{w_m\}, \{\mu_m\}, \{\Sigma_m\})$, comprising mixture weights on the $(M-1)$-simplex, component means in $\mathbb{R}^{d \times M}$, and component covariances in $\mathrm{SPD}(d)^M$.
+
+\subsubsection{Fisher Information for Mixtures}
+
+The Fisher information for mixture models does not decompose cleanly. The full Fisher matrix couples all parameters:
+\begin{equation}
+\mathcal{I} = \begin{pmatrix} \mathcal{I}^{ww} & \mathcal{I}^{w\mu} & \mathcal{I}^{w\Sigma} \\ (\mathcal{I}^{w\mu})^T & \mathcal{I}^{\mu\mu} & \mathcal{I}^{\mu\Sigma} \\ (\mathcal{I}^{w\Sigma})^T & (\mathcal{I}^{\mu\Sigma})^T & \mathcal{I}^{\Sigma\Sigma} \end{pmatrix}
+\end{equation}
+
+The weight-weight block takes the form:
+\begin{equation}
+\mathcal{I}^{ww}_{mn} = \int \frac{1}{q(x)} \frac{\partial q}{\partial w_m} \frac{\partial q}{\partial w_n} dx = \int \frac{\mathcal{N}_m(x) \mathcal{N}_n(x)}{q(x)} dx
+\end{equation}
+
+This integral generally requires numerical evaluation but captures the intuition that weight-inertia depends on component overlap: well-separated modes have nearly independent weight dynamics.
+
+\subsection{Fully General Distributions}
+
+For arbitrary distributions $q(x)$ without parametric form, the state space becomes infinite-dimensional (a functional space). The Fisher-Rao metric generalizes to:
+\begin{equation}
+\langle \delta q_1, \delta q_2 \rangle_q = \int \frac{\delta q_1(x) \, \delta q_2(x)}{q(x)} dx
+\end{equation}
+
+This defines a Riemannian metric on the space of probability densities. Gradient flow with respect to this metric yields the natural gradient dynamics studied in information geometry \citep{Amari2016}.
+
+
+\subsection{Gauge Structure for Non-Gaussian Beliefs}
+
+The gauge transport operators $\Omega_{ij}$ generalize beyond rotations when beliefs are non-Gaussian.
+
+For exponential families transport acts on natural parameters: $\theta \mapsto \Omega \cdot \theta$ where $\Omega$ preserves the parameter space structure.
+
+In the case of mixtures transport can permute components, rotate within-component means, and transform covariances.
+
+For general distributions transport becomes a diffeomorphism of the sample space such that $q(x) \mapsto q(\Omega^{-1}(x)) |\det D\Omega^{-1}|$.
+
+The gauge group expands from $\mathrm{SO}(d)$ to the group of measure-preserving diffeomorphisms, with corresponding enlargement of the connection structure.
+
+\subsection{Summary}
+
+The ansatz that mass equals Fisher information generalizes immediately to exponential families and, in principle, to arbitrary distributions. The Gaussian case developed in the main text is the simplest instance of a broader geometric framework. Extension to mixtures captures multi-modal beliefs at the cost of increased computational complexity. Fully general distributions require infinite-dimensional analysis or computational approximation, but the underlying geometric principle remains unchanged.
+
+\bibliographystyle{apalike}
+\bibliography{references}
+
+\end{document}
