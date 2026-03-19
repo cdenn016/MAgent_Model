@@ -2,37 +2,38 @@
 The Complete Variational Free Energy Functional
 ==================================================
 
-The manuscript's full VFE (Eq. 24, lines 664-675) with ALL terms:
+The manuscript's VFE (Eq. 24, lines 664-675, and Eq. 650):
 
-  S[{q_i}, {p_i}, {φ_i}] =
+  CORE (5 terms from the boxed equation):
 
-    Σ_i ∫_C χ_i KL(q_i || p_i) √|g| dc                                [T1: belief self-consistency]
-  + Σ_i ∫_C χ_i KL(s_i || r_i) √|g| dc                                [T2: model self-consistency]
-  + Σ_ij ∫_C χ_ij β_ij KL(q_i || Ω_ij[q_j]) √|g| dc                  [T3: belief alignment]
-  + Σ_ij ∫_C χ_ij γ_ij KL(p_i || Ω̃_ij[p_j]) √|g| dc                  [T4: model alignment]
-  - Σ_i ∫_C χ_i E_{q_i}[log p(o|q_i)] √|g| dc                        [T5: observation]
-  + λ_φ Σ_i ∫_C ‖∇φ_i‖² √|g| dc                                      [R1: gauge smoothness]
-  + λ_F Σ_i ∫_C tr(F_μν F^μν) √|g| dc                                 [R2: Yang-Mills]
-  + Σ_i Σ_{k=1}^D ρ^k ∫_C χ_i KL(p_i || Ω_{i,A_k}[q_{A_k}]) √|g| dc [T6: hyperpriors]
+    Σ_i ∫_C χ_i KL(q_i || p_i) √|g| dc                          [T1: belief self-consistency]
+  + Σ_i ∫_C χ_i KL(s_i || r_i) √|g| dc                          [T2: model self-consistency]
+  + Σ_ij ∫_C χ_ij β_ij KL(q_i || Ω_ij[q_j]) √|g| dc            [T3: belief alignment]
+  + Σ_ij ∫_C χ_ij γ_ij KL(s_i || Ω̃_ij[s_j]) √|g| dc            [T4: model alignment]
+  - Σ_i ∫_C χ_i E_{q_i}[log p(o|q_i)] √|g| dc                   [T5: observation]
+
+  OPTIONAL EXTENSIONS (mentioned in line 708 and Section 4.4):
+
+  + λ_φ Σ_i ∫_C ‖∇φ_i‖² √|g| dc                                 [R1: gauge smoothness]
+  + λ_F ∫_C tr(F_μν F^μν) √|g| dc                                 [R2: Yang-Mills]
+  + Σ_i Σ_k ρ^k ∫ KL(p_i || Ω_{i,A_k}[q_{A_k}]) √|g| dc        [EXT: hyperpriors]
 
 where:
-  q_i = N(μ_q, Σ_q)        — belief (what agent thinks is true)
-  p_i = N(μ_p, Σ_p)        — prior (what agent expects)
-  s_i = N(μ_s, Σ_s)        — model belief (agent's model of its model)
-  r_i = N(μ_r, Σ_r)        — model prior (expectation for model)
+  q_i = N(μ_q, Σ_q)  — belief about latent state k_i
+  p_i = N(μ_p, Σ_p)  — prior on latent state
+  s_i = N(μ_s, Σ_s)  — model belief (agent's model of reality)
+  r_i = N(μ_r, Σ_r)  — model prior (expected model)
+  Ω_ij = Ω_i Ω_j⁻¹  — belief fiber transport
+  Ω̃_ij = Ω̃_i Ω̃_j⁻¹ — model fiber transport (INDEPENDENT of Ω_ij)
   β_ij = softmax(-KL(q_i || Ω_ij[q_j]) / τ)  — belief attention
-  γ_ij = softmax(-KL(p_i || Ω̃_ij[p_j]) / τ)  — model attention
-  A_k = ancestor at depth k in the hierarchical tower
-  ρ = hyperprior decay (typically 0.5)
-  D = hyperprior depth (typically 5)
+  γ_ij = softmax(-KL(s_i || Ω̃_ij[s_j]) / τ)  — model attention
 
-Note on s_i and r_i (Eq. 650):
-  The pointwise VFE has TWO self-consistency terms. In the Gaussian case
-  where s_i = p_i and r_i is a fixed hyperprior, term T2 reduces to
-  KL(p_i || r_i) — a regularizer preventing priors from drifting too far
-  from their initial values. We implement this as a prior regularizer.
+Note: s_i ≠ p_i. The agent has FOUR distributions:
+  q_i (what I think is happening), p_i (what I expected),
+  s_i (what I think my model IS), r_i (what I expected my model to be).
+  T4 aligns s_i across agents — this is ontology sharing.
 
-Reference: Dennis (2026), Sections 2.10-2.11 (Eqs. 24-25), 4.4-4.5
+Reference: Dennis (2026), Sections 2.10-2.11 (Eqs. 24, 650)
 """
 
 import torch
@@ -149,47 +150,33 @@ class FullVFE(nn.Module):
     # ─────────────────────────────────────────────────────────
 
     def model_self_consistency(self, system: MultiAgentSystem,
-                                model_priors: Optional[Dict[int, Tuple[Tensor, Tensor]]] = None,
                                 chi: Optional[Tensor] = None,
                                 vol: Optional[Tensor] = None) -> Tensor:
-        """T2: Σ_i ∫ χ_i KL(p_i || r_i) √|g| dc.
+        """T2: Σ_i ∫ χ_i KL(s_i || r_i) √|g| dc.
 
-        Regularizer on priors: generative models should not drift
-        too far from their initial hyperpriors r_i.
-
-        In the manuscript's notation: s_i is the "model belief" (the agent's
-        current model) and r_i is the "model prior" (what the model should be).
-        In our implementation: s_i = p_i (current prior) and r_i is a fixed
-        reference prior stored in model_priors.
-
-        If model_priors is None, we use the initial prior values stored
-        in each agent's initial state (effectively no penalty).
+        Model belief should not deviate too far from model prior.
+        s_i is the agent's current model of reality; r_i is what
+        it expected its model to be.
 
         Args:
             system: MultiAgentSystem
-            model_priors: dict mapping agent_id → (mu_r, sigma_r)
-                         the fixed hyperprior for each agent's model
             chi: (N, *grid) support
             vol: (*grid) volume form
         Returns:
             Scalar model self-consistency energy
         """
-        if model_priors is None:
-            return torch.tensor(0.0, device=next(system.parameters()).device)
+        mu_s = system.get_all_mu_s()
+        sigma_s = system.get_all_sigma_s()
+        mu_r = system.get_all_mu_r()
+        sigma_r = system.get_all_sigma_r()
 
-        total = torch.tensor(0.0, device=next(system.parameters()).device)
-        for i, agent in enumerate(system.agents):
-            if agent.agent_id in model_priors:
-                mu_r, sigma_r = model_priors[agent.agent_id]
-                kl = gaussian_kl(agent.mu_p.unsqueeze(0), agent.sigma_p.unsqueeze(0),
-                                 mu_r.unsqueeze(0), sigma_r.unsqueeze(0))
-                if chi is not None:
-                    kl = kl * chi[i:i+1]
-                if vol is not None:
-                    kl = kl * vol
-                total = total + kl.sum()
+        kl = gaussian_kl(mu_s, sigma_s, mu_r, sigma_r)  # (N, *grid)
 
-        return total
+        if chi is not None:
+            kl = kl * chi
+        if vol is not None:
+            kl = kl * vol
+        return kl.sum()
 
     # ─────────────────────────────────────────────────────────
     # T3: Belief alignment KL(q_i || Ω_ij[q_j])
@@ -231,32 +218,32 @@ class FullVFE(nn.Module):
     # ─────────────────────────────────────────────────────────
 
     def model_alignment(self, system: MultiAgentSystem,
-                         transport_fn=None,
+                         model_transport_fn=None,
                          chi_ij: Optional[Tensor] = None,
                          vol: Optional[Tensor] = None
                          ) -> Tuple[Tensor, Tensor, Tensor]:
-        """T4: Σ_ij ∫ χ_ij γ_ij KL(p_i || Ω̃_ij[p_j]) √|g| dc.
+        """T4: Σ_ij ∫ χ_ij γ_ij KL(s_i || Ω̃_ij[s_j]) √|g| dc.
 
-        Model-model alignment: agents align generative models,
+        Model alignment: agents align their models of reality (s_i),
         forming shared ontologies. This is what makes science possible —
-        agents must agree not just on beliefs but on the MODEL of reality.
+        agents must agree not just on beliefs but on the MODEL itself.
 
-        The transport Ω̃_ij may differ from Ω_ij (different fiber for models
-        vs beliefs). In the current implementation, we use the same transport.
+        Uses model fiber transport Ω̃_ij (independent of belief transport Ω_ij).
 
         Args:
             system: MultiAgentSystem
-            transport_fn: callable(i, j) → (*grid, K, K) model transport.
+            model_transport_fn: callable(i, j) → (*grid, K, K) model transport.
+                               If None, uses vertex-local Ω̃_i Ω̃_j⁻¹.
             chi_ij: (N, N, *grid) overlap
             vol: (*grid) volume form
         Returns:
             (energy, gamma, E_pairwise)
         """
         N = system.N_agents
-        mu_p = system.get_all_mu_p()
-        sigma_p = system.get_all_sigma_p()
+        mu_s = system.get_all_mu_s()
+        sigma_s = system.get_all_sigma_s()
 
-        E = self._compute_pairwise_kl(mu_p, sigma_p, system, transport_fn)
+        E = self._compute_pairwise_kl_model(mu_s, sigma_s, system, model_transport_fn)
 
         gamma = self._softmax_attention(E, self.tau_model)
 
@@ -421,6 +408,39 @@ class FullVFE(nn.Module):
     # Helper: pairwise KL with transport
     # ─────────────────────────────────────────────────────────
 
+    def _compute_pairwise_kl_model(self, mu: Tensor, sigma: Tensor,
+                                    system: MultiAgentSystem,
+                                    model_transport_fn=None) -> Tensor:
+        """Pairwise KL on the model fiber using model transport Ω̃_ij."""
+        N = system.N_agents
+        grid_shape = system.grid_shape
+        device = mu.device
+
+        if model_transport_fn is not None:
+            E = torch.zeros((N, N) + grid_shape, device=device)
+            for i in range(N):
+                for j in range(N):
+                    if i == j:
+                        continue
+                    omega_ij = model_transport_fn(i, j)
+                    mu_j_t = (omega_ij @ mu[j].unsqueeze(-1)).squeeze(-1)
+                    sigma_j_t = omega_ij @ sigma[j] @ omega_ij.transpose(-2, -1)
+                    E[i, j] = gaussian_kl(mu[i], sigma[i], mu_j_t, sigma_j_t)
+            return E
+        else:
+            # Vertex-local model transport: Ω̃_ij = Ω̃_i Ω̃_j⁻¹
+            omegas = system.get_all_omega_model()
+            omega_inv = torch.linalg.inv(omegas)
+            transport = omegas.unsqueeze(1) @ omega_inv.unsqueeze(0)
+
+            mu_j = mu.unsqueeze(0).expand(N, -1, *mu.shape[1:])
+            sigma_j = sigma.unsqueeze(0).expand(N, -1, *sigma.shape[1:])
+            mu_t = (transport @ mu_j.unsqueeze(-1)).squeeze(-1)
+            sigma_t = transport @ sigma_j @ transport.transpose(-2, -1)
+            mu_i = mu.unsqueeze(1).expand(-1, N, *mu.shape[1:])
+            sigma_i = sigma.unsqueeze(1).expand(-1, N, *sigma.shape[1:])
+            return gaussian_kl(mu_i, sigma_i, mu_t, sigma_t)
+
     def _compute_pairwise_kl(self, mu: Tensor, sigma: Tensor,
                               system: MultiAgentSystem,
                               transport_fn=None) -> Tensor:
@@ -474,23 +494,29 @@ class FullVFE(nn.Module):
     def forward(self, system: MultiAgentSystem,
                 observations: Optional[Tensor] = None,
                 obs_precision: Optional[Tensor] = None,
-                model_priors: Optional[Dict[int, Tuple[Tensor, Tensor]]] = None,
                 ancestors: Optional[List[Dict[int, Agent]]] = None,
                 transport_fn=None,
+                model_transport_fn=None,
                 lattice_gauge=None,
                 vol: Optional[Tensor] = None
                 ) -> Dict[str, Tensor]:
-        """Compute the COMPLETE variational free energy.
+        """Compute the variational free energy.
 
-        S = λ₁·T1 + λ₂·T2 + λ₃·T3 + λ₄·T4 + λ₅·T5 + λ₆·T6 + λ_φ·R1 + λ_F·R2
+        CORE (from Eq. 24):
+          S = λ₁·T1 + λ₂·T2 + λ₃·T3 + λ₄·T4 + λ₅·T5
+
+        OPTIONAL EXTENSIONS (off by default, set λ > 0 to enable):
+          + λ_hyper · hyperprior_term
+          + λ_smooth · gauge_smoothness
+          + λ_ym · yang_mills_penalty
 
         Args:
             system: MultiAgentSystem
-            observations: (N, *grid, K) or (*grid, K) observation data
+            observations: (N, *grid, K) observation data
             obs_precision: observation precision matrix or scalar
-            model_priors: {agent_id: (mu_r, sigma_r)} fixed model hyperpriors
             ancestors: list of {child_id: ancestor_Agent} for hyperprior term
-            transport_fn: callable(i,j) → transport operator (for lattice gauge)
+            transport_fn: callable(i,j) → belief transport (for lattice gauge)
+            model_transport_fn: callable(i,j) → model transport (for lattice gauge)
             lattice_gauge: LatticeGaugeField for Yang-Mills penalty
             vol: (*grid) volume form √|g| (None → flat metric)
         Returns:
@@ -499,70 +525,74 @@ class FullVFE(nn.Module):
         device = next(system.parameters()).device
 
         # Support and overlap
-        chi_list = [a.chi for a in system.agents]
-        chi_all = torch.stack(chi_list)  # (N, *grid)
-
-        # For 0D systems, chi is (N, 1) but KL is (N,) — squeeze to match
+        chi_all = torch.stack([a.chi for a in system.agents])
         grid_shape = system.grid_shape
         if not grid_shape:
-            chi_all = chi_all.squeeze(-1)  # (N,)
+            chi_all = chi_all.squeeze(-1)
+        chi_ij = chi_all.unsqueeze(1) * chi_all.unsqueeze(0)
 
-        chi_ij = chi_all.unsqueeze(1) * chi_all.unsqueeze(0)  # (N, N, *grid)
+        # ── CORE TERMS (Eq. 24) ──
 
-        # ── T1: belief self-consistency ──
+        # T1: KL(q_i || p_i)
         T1 = self.belief_self_consistency(system, chi_all, vol)
 
-        # ── T2: model self-consistency ──
-        T2 = self.model_self_consistency(system, model_priors, chi_all, vol)
+        # T2: KL(s_i || r_i)
+        T2 = self.model_self_consistency(system, chi_all, vol)
 
-        # ── T3: belief alignment ──
+        # T3: β_ij KL(q_i || Ω_ij[q_j])
         T3, beta, E_belief = self.belief_alignment(
             system, transport_fn, chi_ij, vol
         )
 
-        # ── T4: model alignment ──
+        # T4: γ_ij KL(s_i || Ω̃_ij[s_j])
         T4, gamma, E_model = self.model_alignment(
-            system, transport_fn, chi_ij, vol
+            system, model_transport_fn, chi_ij, vol
         )
 
-        # ── T5: observation ──
+        # T5: -E_q[log p(o|q)]
         T5 = torch.tensor(0.0, device=device)
         if observations is not None:
             T5 = self.observation_term(system, observations, obs_precision,
                                         chi_all, vol)
 
-        # ── T6: hyperpriors ──
-        T6 = torch.tensor(0.0, device=device)
-        if ancestors is not None and len(ancestors) > 0:
-            T6 = self.hyperprior_term(system, ancestors, chi_all, vol)
-
-        # ── R1: gauge smoothness ──
-        R1 = self.gauge_smoothness(system, vol)
-
-        # ── R2: Yang-Mills ──
-        R2 = self.yang_mills_penalty(lattice_gauge)
-
-        # ── Total ──
         total = (self.lambda_self * T1
                  + self.lambda_model_self * T2
                  + self.lambda_belief * T3
                  + self.lambda_model * T4
-                 + self.lambda_obs * T5
-                 + self.lambda_hyper * T6
-                 + self.lambda_smooth * R1
-                 + self.lambda_ym * R2)
+                 + self.lambda_obs * T5)
+
+        # ── OPTIONAL EXTENSIONS (off by default) ──
+
+        # Hyperpriors from Ouroboros tower (Section 4.4)
+        T6 = torch.tensor(0.0, device=device)
+        if self.lambda_hyper > 0 and ancestors is not None and len(ancestors) > 0:
+            T6 = self.hyperprior_term(system, ancestors, chi_all, vol)
+            total = total + self.lambda_hyper * T6
+
+        # Gauge smoothness (line 708, "optional regularizers")
+        R1 = torch.tensor(0.0, device=device)
+        if self.lambda_smooth > 0 and grid_shape:
+            R1 = self.gauge_smoothness(system, vol)
+            total = total + self.lambda_smooth * R1
+
+        # Yang-Mills (line 708, "optional regularizers")
+        R2 = torch.tensor(0.0, device=device)
+        if self.lambda_ym > 0 and lattice_gauge is not None:
+            R2 = self.yang_mills_penalty(lattice_gauge)
+            total = total + self.lambda_ym * R2
 
         return {
             'total': total,
-            # Individual terms
+            # Core terms
             'T1_belief_self': T1,
             'T2_model_self': T2,
             'T3_belief_align': T3,
             'T4_model_align': T4,
             'T5_observation': T5,
-            'T6_hyperprior': T6,
-            'R1_gauge_smooth': R1,
-            'R2_yang_mills': R2,
+            # Optional extensions
+            'EXT_hyperprior': T6,
+            'EXT_gauge_smooth': R1,
+            'EXT_yang_mills': R2,
             # Attention weights
             'beta': beta,
             'gamma': gamma,
@@ -575,12 +605,12 @@ class FullVFE(nn.Module):
         """Format a one-line summary of the VFE components."""
         parts = []
         for key in ['T1_belief_self', 'T2_model_self', 'T3_belief_align',
-                     'T4_model_align', 'T5_observation', 'T6_hyperprior',
-                     'R1_gauge_smooth', 'R2_yang_mills']:
-            val = result[key]
+                     'T4_model_align', 'T5_observation',
+                     'EXT_hyperprior', 'EXT_gauge_smooth', 'EXT_yang_mills']:
+            val = result.get(key, 0.0)
             v = val.item() if isinstance(val, Tensor) else val
             if abs(v) > 1e-6:
-                short = key.split('_', 1)[0]
+                short = key.replace('EXT_', '').split('_', 1)[0]
                 parts.append(f"{short}={v:.3f}")
         total = result['total'].item() if isinstance(result['total'], Tensor) else result['total']
         return f"S={total:.4f} [{' '.join(parts)}]"

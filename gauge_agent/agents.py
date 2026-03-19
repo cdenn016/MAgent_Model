@@ -2,15 +2,25 @@
 Layer 3: Agents as Smooth Sections of Associated Bundles
 =========================================================
 
-An agent A^i with support domain U_i ⊆ C consists of three smooth fields:
-  q_i : U_i → E_q   (belief section — what it thinks is true)
-  p_i : U_i → E_p   (prior section — what it expects)
-  Ω_i : U_i → GL(K)  (gauge frame — its reference system)
+An agent A^i with support domain U_i ⊆ C consists of fields on TWO fibers:
 
-For the 0D (transformer) limit: each field is a single value.
-For dim(C) ≥ 1: fields are defined on a discretized grid.
+  Belief fiber (latent state k_i):
+    q_i : U_i → E_q   (belief — what it thinks is true about k_i)
+    p_i : U_i → E_p   (prior — what it expects for k_i)
+    Ω_i : U_i → GL(K)  (belief gauge frame)
 
-Reference: Dennis (2026), Section 2.5 (Definition 5: Agent)
+  Model fiber (generative model m_i):
+    s_i : U_i → E_s   (model belief — its current model of reality)
+    r_i : U_i → E_r   (model prior — expected model)
+    Ω̃_i : U_i → GL(K)  (model gauge frame)
+
+The VFE (Eq. 24) uses both fibers:
+  T1 = KL(q_i || p_i)              — belief stays near prior
+  T2 = KL(s_i || r_i)              — model stays near model-prior
+  T3 = β_ij KL(q_i || Ω_ij[q_j])  — beliefs align across agents
+  T4 = γ_ij KL(s_i || Ω̃_ij[s_j]) — models align across agents
+
+Reference: Dennis (2026), Sections 2.5, 2.10 (Eq. 24, line 650)
 """
 
 import torch
@@ -25,23 +35,37 @@ from gauge_agent.gauge_structure import GaugeFrame, TransportOperator
 
 
 class Agent(nn.Module):
-    """A single agent as a section of the associated bundle.
+    """A single agent as a section of two associated bundles.
 
-    Carries belief q_i = N(μ_q, Σ_q), prior p_i = N(μ_p, Σ_p),
-    and gauge frame Ω_i ∈ GL(K), all as fields over the base manifold.
+    Belief fiber (latent state k_i):
+      q_i = N(μ_q, Σ_q)    — belief about latent state
+      p_i = N(μ_p, Σ_p)    — prior on latent state
+      Ω_i ∈ GL(K)           — belief gauge frame
+
+    Model fiber (generative model m_i):
+      s_i = N(μ_s, Σ_s)    — model belief (agent's model of reality)
+      r_i = N(μ_r, Σ_r)    — model prior (expected model)
+      Ω̃_i ∈ GL(K)           — model gauge frame
+
+    The distinction matters: q_i and s_i are DIFFERENT.
+    q_i is "what I think is happening"; s_i is "what I think
+    my model of the world IS". Aligning s_i across agents
+    (T4 in the VFE) is what creates shared ontologies.
 
     Args:
         K: fiber (latent) dimension
         grid_shape: shape of base manifold discretization, () for 0D
-        init_belief_scale: scale for belief initialization
-        init_prior_scale: scale for prior initialization
-        init_gauge_scale: perturbation of gauge frame from identity
+        init_belief_scale: scale for q_i initialization
+        init_prior_scale: scale for p_i initialization
+        init_model_scale: scale for s_i/r_i initialization
+        init_gauge_scale: perturbation of gauge frames from identity
         agent_id: unique identifier
     """
 
     def __init__(self, K: int, grid_shape: Tuple[int, ...] = (),
                  init_belief_scale: float = 1.0,
                  init_prior_scale: float = 1.0,
+                 init_model_scale: float = 1.0,
                  init_gauge_scale: float = 0.1,
                  agent_id: int = 0):
         super().__init__()
@@ -55,32 +79,46 @@ class Agent(nn.Module):
             n_points *= s
         self.n_points = max(n_points, 1)
 
-        # Belief parameters q_i = N(μ_q, Σ_q)
         shape_mu = grid_shape + (K,)
         shape_sigma = grid_shape + (K, K)
 
+        def _make_L(scale):
+            L = scale * torch.eye(K)
+            if grid_shape:
+                L = L.unsqueeze(0).expand(shape_sigma).clone()
+            return L
+
+        def _make_omega(scale):
+            omega = torch.eye(K)
+            if grid_shape:
+                omega = omega.unsqueeze(0).expand(shape_sigma).clone()
+            return omega + scale * torch.randn(shape_sigma)
+
+        # ── Belief fiber ──
+        # q_i = N(μ_q, Σ_q) — belief about latent state k_i
         self.mu_q = nn.Parameter(init_belief_scale * torch.randn(shape_mu))
-        L_q = init_belief_scale * torch.eye(K)
-        if grid_shape:
-            L_q = L_q.unsqueeze(0).expand(grid_shape + (K, K)).clone()
-        self._L_q = nn.Parameter(L_q)
+        self._L_q = nn.Parameter(_make_L(init_belief_scale))
 
-        # Prior parameters p_i = N(μ_p, Σ_p)
+        # p_i = N(μ_p, Σ_p) — prior on latent state
         self.mu_p = nn.Parameter(init_prior_scale * torch.randn(shape_mu))
-        L_p = init_prior_scale * torch.eye(K)
-        if grid_shape:
-            L_p = L_p.unsqueeze(0).expand(grid_shape + (K, K)).clone()
-        self._L_p = nn.Parameter(L_p)
+        self._L_p = nn.Parameter(_make_L(init_prior_scale))
 
-        # Gauge frame Ω_i ∈ GL(K)
-        shape_omega = grid_shape + (K, K)
-        omega = torch.eye(K)
-        if grid_shape:
-            omega = omega.unsqueeze(0).expand(shape_omega).clone()
-        omega = omega + init_gauge_scale * torch.randn(shape_omega)
-        self.omega = nn.Parameter(omega)
+        # Ω_i ∈ GL(K) — belief gauge frame
+        self.omega = nn.Parameter(_make_omega(init_gauge_scale))
 
-        # Support function χ_i(c) — for now, full support
+        # ── Model fiber ──
+        # s_i = N(μ_s, Σ_s) — model belief (what agent thinks its model IS)
+        self.mu_s = nn.Parameter(init_model_scale * torch.randn(shape_mu))
+        self._L_s = nn.Parameter(_make_L(init_model_scale))
+
+        # r_i = N(μ_r, Σ_r) — model prior (expected model)
+        self.mu_r = nn.Parameter(init_model_scale * torch.randn(shape_mu))
+        self._L_r = nn.Parameter(_make_L(init_model_scale))
+
+        # Ω̃_i ∈ GL(K) — model gauge frame (independent of belief frame)
+        self.omega_model = nn.Parameter(_make_omega(init_gauge_scale))
+
+        # Support function χ_i(c)
         self.register_buffer('chi', torch.ones(grid_shape if grid_shape else (1,)))
 
     @property
@@ -121,6 +159,40 @@ class Agent(nn.Module):
         """Prior precision Λ_p = Σ_p⁻¹."""
         return torch.cholesky_inverse(self.L_p)
 
+    # ── Model fiber: s_i, r_i ──
+
+    @property
+    def L_s(self) -> Tensor:
+        """Cholesky factor of model belief covariance."""
+        L = torch.tril(self._L_s)
+        diag = L.diagonal(dim1=-2, dim2=-1)
+        L = L - torch.diag_embed(diag) + torch.diag_embed(diag.abs().clamp(min=1e-6))
+        return L
+
+    @property
+    def sigma_s(self) -> Tensor:
+        """Model belief covariance Σ_s = L_s L_s^T."""
+        L = self.L_s
+        return L @ L.transpose(-2, -1)
+
+    @property
+    def L_r(self) -> Tensor:
+        """Cholesky factor of model prior covariance."""
+        L = torch.tril(self._L_r)
+        diag = L.diagonal(dim1=-2, dim2=-1)
+        L = L - torch.diag_embed(diag) + torch.diag_embed(diag.abs().clamp(min=1e-6))
+        return L
+
+    @property
+    def sigma_r(self) -> Tensor:
+        """Model prior covariance Σ_r = L_r L_r^T."""
+        L = self.L_r
+        return L @ L.transpose(-2, -1)
+
+    def model_self_kl(self) -> Tensor:
+        """T2: KL(s_i || r_i) — model belief vs model prior."""
+        return gaussian_kl(self.mu_s, self.sigma_s, self.mu_r, self.sigma_r)
+
     def self_kl(self) -> Tensor:
         """Self-consistency: KL(q_i || p_i).
 
@@ -148,20 +220,25 @@ class Agent(nn.Module):
             'K': self.K,
             'mu_q_norm': self.mu_q.data.norm().item(),
             'mu_p_norm': self.mu_p.data.norm().item(),
+            'mu_s_norm': self.mu_s.data.norm().item(),
             'sigma_q_trace': self.sigma_q.diagonal(dim1=-2, dim2=-1).sum(-1).mean().item(),
             'sigma_p_trace': self.sigma_p.diagonal(dim1=-2, dim2=-1).sum(-1).mean().item(),
+            'sigma_s_trace': self.sigma_s.diagonal(dim1=-2, dim2=-1).sum(-1).mean().item(),
             'omega_det': torch.linalg.det(self.omega).mean().item(),
+            'omega_model_det': torch.linalg.det(self.omega_model).mean().item(),
             'self_kl': self.self_kl().mean().item(),
+            'model_self_kl': self.model_self_kl().mean().item(),
         }
 
 
 class MultiAgentSystem(nn.Module):
     """A collection of agents on a shared base manifold.
 
-    M = {A^i = (q_i, p_i, Ω_i)}_{i ∈ I}
+    M = {A^i = (q_i, p_i, s_i, r_i, Ω_i, Ω̃_i)}_{i ∈ I}
 
-    Manages inter-agent transport, pairwise KL computation,
-    and the overlap structure χ_ij = χ_i · χ_j.
+    Each agent carries TWO fiber bundles:
+      Belief fiber: (q_i, p_i, Ω_i)
+      Model fiber:  (s_i, r_i, Ω̃_i)
 
     Reference: Dennis (2026), Definition 6 (Multi-Agent System)
 
@@ -169,8 +246,9 @@ class MultiAgentSystem(nn.Module):
         N_agents: number of agents
         K: fiber dimension
         grid_shape: base manifold discretization
-        init_belief_scale: scale for belief initialization
-        init_prior_scale: scale for prior initialization
+        init_belief_scale: scale for q_i/p_i initialization
+        init_prior_scale: scale for p_i initialization
+        init_model_scale: scale for s_i/r_i initialization
         init_gauge_scale: gauge frame perturbation scale
     """
 
@@ -178,6 +256,7 @@ class MultiAgentSystem(nn.Module):
                  grid_shape: Tuple[int, ...] = (),
                  init_belief_scale: float = 1.0,
                  init_prior_scale: float = 1.0,
+                 init_model_scale: float = 1.0,
                  init_gauge_scale: float = 0.1):
         super().__init__()
         self.N_agents = N_agents
@@ -188,6 +267,7 @@ class MultiAgentSystem(nn.Module):
             Agent(K, grid_shape,
                   init_belief_scale=init_belief_scale,
                   init_prior_scale=init_prior_scale,
+                  init_model_scale=init_model_scale,
                   init_gauge_scale=init_gauge_scale,
                   agent_id=i)
             for i in range(N_agents)
@@ -217,13 +297,39 @@ class MultiAgentSystem(nn.Module):
         """Stack all prior covariances."""
         return torch.stack([a.sigma_p for a in self.agents])
 
+    # ── Model fiber accessors ──
+
+    def get_all_mu_s(self) -> Tensor:
+        """Stack all model belief means."""
+        return torch.stack([a.mu_s for a in self.agents])
+
+    def get_all_sigma_s(self) -> Tensor:
+        """Stack all model belief covariances."""
+        return torch.stack([a.sigma_s for a in self.agents])
+
+    def get_all_mu_r(self) -> Tensor:
+        """Stack all model prior means."""
+        return torch.stack([a.mu_r for a in self.agents])
+
+    def get_all_sigma_r(self) -> Tensor:
+        """Stack all model prior covariances."""
+        return torch.stack([a.sigma_r for a in self.agents])
+
     def get_all_omega(self) -> Tensor:
-        """Stack all gauge frames.
+        """Stack all belief gauge frames.
 
         Returns:
             (N, *grid, K, K) gauge frame matrices
         """
         return torch.stack([a.omega for a in self.agents])
+
+    def get_all_omega_model(self) -> Tensor:
+        """Stack all model gauge frames Ω̃_i.
+
+        Returns:
+            (N, *grid, K, K) model gauge frame matrices
+        """
+        return torch.stack([a.omega_model for a in self.agents])
 
     def pairwise_transport_operators(self) -> Tensor:
         """Compute all pairwise Ω_ij = Ω_i @ Ω_j⁻¹.
@@ -236,25 +342,44 @@ class MultiAgentSystem(nn.Module):
         # (N, 1, *grid, K, K) @ (1, N, *grid, K, K)
         return omegas.unsqueeze(1) @ omega_inv.unsqueeze(0)
 
-    def pairwise_alignment_energies(self, mode: str = 'belief') -> Tensor:
-        """Compute E_ij(c) = KL(q_i || Ω_ij[q_j]) for all pairs.
+    def pairwise_model_transport_operators(self) -> Tensor:
+        """Compute all pairwise Ω̃_ij = Ω̃_i @ Ω̃_j⁻¹ on the model fiber.
 
-        Reference: Eq. (14) — the alignment energy.
+        Returns:
+            (N, N, *grid, K, K) model transport operators
+        """
+        omegas = self.get_all_omega_model()
+        omega_inv = torch.linalg.inv(omegas)
+        return omegas.unsqueeze(1) @ omega_inv.unsqueeze(0)
+
+    def pairwise_alignment_energies(self, mode: str = 'belief') -> Tensor:
+        """Compute pairwise alignment energies.
+
+        mode='belief': KL(q_i || Ω_ij[q_j])  — belief alignment (T3)
+        mode='model':  KL(s_i || Ω̃_ij[s_j])  — model alignment (T4)
+        mode='prior':  KL(p_i || Ω_ij[p_j])   — legacy prior alignment
 
         Args:
-            mode: 'belief' for q-q alignment, 'prior' for p-p alignment
+            mode: 'belief', 'model', or 'prior'
         Returns:
             (N, N, *grid) tensor of pairwise KL divergences
         """
         if mode == 'belief':
-            mu = self.get_all_mu_q()       # (N, *grid, K)
-            sigma = self.get_all_sigma_q()  # (N, *grid, K, K)
-        else:
+            mu = self.get_all_mu_q()
+            sigma = self.get_all_sigma_q()
+        elif mode == 'model':
+            mu = self.get_all_mu_s()
+            sigma = self.get_all_sigma_s()
+        else:  # 'prior' — legacy
             mu = self.get_all_mu_p()
             sigma = self.get_all_sigma_p()
 
         N = self.N_agents
-        transports = self.pairwise_transport_operators()  # (N, N, *grid, K, K)
+        # Use model transport for model fiber, belief transport otherwise
+        if mode == 'model':
+            transports = self.pairwise_model_transport_operators()
+        else:
+            transports = self.pairwise_transport_operators()
 
         # Transport all j beliefs into all i frames
         # mu_j: (1, N, *grid, K) → transported: (N, N, *grid, K)
