@@ -134,22 +134,23 @@ class Manifold(ABC):
                               direction: int, h: float = 1e-3) -> Tensor:
         """Covariant derivative ∇_μ V^ν = ∂_μ V^ν + Γ^ν_μλ V^λ.
 
+        For grid-based vector fields, uses finite differences along the
+        grid direction. The partial derivative ∂_μ V is computed via
+        central differences with periodic wrapping (torch.roll).
+
         Args:
-            V: (..., dim) vector field
-            c: (..., dim) coordinates
+            V: (..., dim) vector field on grid
+            c: (..., dim) coordinates (used for Christoffel symbols)
             direction: μ index for derivative direction
             h: finite difference step
         Returns:
             (..., dim) covariant derivative
         """
         n = self.dim
-        e_mu = torch.zeros(n, device=c.device, dtype=c.dtype)
-        e_mu[direction] = h
 
-        # ∂_μ V (finite difference)
-        # Note: for grid-based V, this should use grid indices
-        # Here we assume V is a function of c
-        dV = (V - V) / (2 * h)  # placeholder — actual implementation below
+        # ∂_μ V via central finite differences along grid direction
+        dV = (torch.roll(V, -1, dims=direction) -
+              torch.roll(V, 1, dims=direction)) / (2 * h)
 
         gamma = self.christoffel(c, h)
 
@@ -626,9 +627,16 @@ class ProductManifold(Manifold):
             c = self.coordinates()
         parts = self._split_coords(c)
         metrics = [f.metric(p) for f, p in zip(self.factors, parts)]
-        return torch.block_diag(*[m.reshape(-1, m.shape[-2], m.shape[-1])[0]
-                                  for m in metrics]).expand(
-            c.shape[:-1] + (self.dim, self.dim))
+
+        # Build block-diagonal metric at each grid point
+        batch_shape = c.shape[:-1]
+        g = torch.zeros(batch_shape + (self.dim, self.dim),
+                        device=c.device, dtype=c.dtype)
+        offset = 0
+        for m, d in zip(metrics, self._dim_splits):
+            g[..., offset:offset+d, offset:offset+d] = m
+            offset += d
+        return g
 
     def volume_form(self, c=None) -> Tensor:
         if c is None:
