@@ -35,6 +35,7 @@ from gauge_agent.lattice_gauge import LatticeGaugeField, WilsonAction
 from gauge_agent.support import ball_support, overlap_matrix, volume_weighted_integral
 from gauge_agent.statistical_manifold import gaussian_kl
 from gauge_agent.free_energy import FreeEnergyFunctional
+from gauge_agent.full_vfe import FullVFE
 
 
 class ManifoldAgentSystem(nn.Module):
@@ -96,6 +97,14 @@ class ManifoldAgentSystem(nn.Module):
 
         # Wilson action for Yang-Mills regularization
         self.wilson_action = WilsonAction(self.gauge_field, ym_coupling)
+
+        # Full VFE (all 8 terms)
+        self.vfe = FullVFE(
+            lambda_self=1.0, lambda_model_self=0.5,
+            lambda_belief=1.0, lambda_model=0.5,
+            lambda_obs=1.0, lambda_smooth=0.01,
+            lambda_ym=ym_coupling, lambda_hyper=0.5,
+        )
 
     def _sync_frames_to_gauge(self):
         """Sync agent omega params with lattice gauge vertex frames."""
@@ -172,64 +181,45 @@ class ManifoldAgentSystem(nn.Module):
         return E
 
     def volume_weighted_free_energy(self,
-                                     observations: Optional[Tensor] = None
+                                     observations: Optional[Tensor] = None,
+                                     obs_precision: Optional[Tensor] = None,
+                                     model_priors: Optional[Dict] = None,
+                                     ancestors: Optional[List] = None,
                                      ) -> Dict[str, Tensor]:
-        """Compute the full free energy with volume-weighted integration.
+        """Compute the COMPLETE variational free energy (Eq. 24).
 
-        S = Σ_i ∫ χ_i KL(q_i||p_i) √|g| dc
-          + Σ_ij ∫ χ_ij β_ij KL(q_i||Ω̂_ij[q_j]) √|g| dc
-          + β_YM · S_YM
+        All 8 terms from the manuscript:
+          T1: belief self-consistency KL(q_i || p_i)
+          T2: model self-consistency KL(p_i || r_i)
+          T3: belief alignment β_ij KL(q_i || Ω_ij[q_j])
+          T4: model alignment γ_ij KL(p_i || Ω̃_ij[p_j])
+          T5: observation likelihood
+          T6: hyperprior terms from Ouroboros tower
+          R1: gauge field smoothness
+          R2: Yang-Mills curvature penalty
+
+        All with proper √|g| volume weighting and full lattice gauge transport.
 
         Returns:
-            Dict with total, components, attention weights, curvature
+            Dict with total, all 8 components, attention weights
         """
-        vol = self.vol_form
-        N = self.N_agents
-        mu_q = self.system.get_all_mu_q()
-        sigma_q = self.system.get_all_sigma_q()
-        mu_p = self.system.get_all_mu_p()
-        sigma_p = self.system.get_all_sigma_p()
+        result = self.vfe(
+            self.system,
+            observations=observations,
+            obs_precision=obs_precision,
+            model_priors=model_priors,
+            ancestors=ancestors,
+            transport_fn=self.full_transport,
+            lattice_gauge=self.gauge_field,
+            vol=self.vol_form,
+        )
 
-        # 1. Self-consistency with volume weighting
-        self_kl = torch.zeros((), device=mu_q.device)
-        for i in range(N):
-            kl_i = gaussian_kl(mu_q[i], sigma_q[i], mu_p[i], sigma_p[i])
-            chi_i = self.system.agents[i].chi
-            self_kl = self_kl + (kl_i * chi_i * vol).sum()
-
-        # 2. Belief alignment with edge twists
-        E_align = self.pairwise_alignment_with_twists()
-
-        # Attention weights (softmax of -E/τ)
-        mask = 1.0 - torch.eye(N, device=E_align.device)
-        for _ in range(len(self.manifold.grid_shape)):
-            mask = mask.unsqueeze(-1)
-        logits = -E_align + (mask - 1) * 1e9
-        beta = torch.softmax(logits, dim=1) * mask
-
-        # Overlap-weighted alignment
-        chi_all = torch.stack([a.chi for a in self.system.agents])
-        chi_ij = chi_all.unsqueeze(1) * chi_all.unsqueeze(0)
-
-        align_energy = (beta * E_align * chi_ij * vol).sum()
-
-        # 3. Yang-Mills regularization
+        # Add Wilson action diagnostics
         ym_result = self.wilson_action()
-        ym_action = ym_result['action']
+        result['mean_plaquette'] = ym_result['mean_plaquette']
+        result['curvature_per_agent'] = ym_result['curvature_per_agent']
 
-        # Total
-        total = self_kl + align_energy + ym_action
-
-        return {
-            'total': total,
-            'self_consistency': self_kl,
-            'belief_alignment': align_energy,
-            'yang_mills': ym_action,
-            'mean_plaquette': ym_result['mean_plaquette'],
-            'curvature_per_agent': ym_result['curvature_per_agent'],
-            'attention': beta.detach(),
-            'alignment_energies': E_align.detach(),
-        }
+        return result
 
     def holonomy_spectrum(self) -> Dict[str, Tensor]:
         """Compute holonomy diagnostics for all agents.
@@ -257,6 +247,9 @@ class ManifoldAgentSystem(nn.Module):
 
     def evolve(self, n_steps: int, lr: float = 0.01,
                observations: Optional[Tensor] = None,
+               obs_precision: Optional[Tensor] = None,
+               model_priors: Optional[Dict] = None,
+               ancestors: Optional[List] = None,
                verbose: bool = True) -> List[Dict]:
         """Evolve the full manifold-aware system.
 
@@ -267,23 +260,25 @@ class ManifoldAgentSystem(nn.Module):
 
         for t in range(n_steps):
             optimizer.zero_grad()
-            result = self.volume_weighted_free_energy(observations)
+            result = self.volume_weighted_free_energy(
+                observations, obs_precision, model_priors, ancestors
+            )
             result['total'].backward()
-            # Gradient clipping
             torch.nn.utils.clip_grad_norm_(self.parameters(), 5.0)
             optimizer.step()
 
             info = {k: v.item() if isinstance(v, Tensor) and v.dim() == 0 else v
                     for k, v in result.items()
-                    if k not in ('attention', 'alignment_energies')}
+                    if k not in ('beta', 'gamma', 'E_belief_pairwise',
+                                 'E_model_pairwise')}
             info['step'] = t
             history.append(info)
 
             if verbose and t % max(n_steps // 10, 1) == 0:
-                print(f"  Step {t:4d} | S = {info['total']:.4f} | "
-                      f"KL = {info['self_consistency']:.4f} | "
-                      f"Align = {info['belief_alignment']:.4f} | "
-                      f"YM = {info['yang_mills']:.4f} | "
-                      f"⟨W⟩ = {info['mean_plaquette']:.4f}")
+                summary = self.vfe.summary_string(result)
+                plaq = result.get('mean_plaquette', torch.tensor(0.0))
+                if isinstance(plaq, Tensor):
+                    plaq = plaq.item()
+                print(f"  Step {t:4d} | {summary} | ⟨W⟩={plaq:.4f}")
 
         return history
