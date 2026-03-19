@@ -4,13 +4,18 @@ Layer 7: Meta-Agent Formation and Hierarchical Emergence
 
 When agents achieve sufficient belief coherence, they form meta-agents
 at the next hierarchical scale. Meta-agents are full agents in their
-own right — sections (q_I, p_I, Ω_I) constructed via gauge-covariant
-averaging of constituent beliefs.
+own right — sections (q_I, p_I, s_I, r_I, Ω_I, Ω̃_I) constructed via
+gauge-covariant averaging of constituent beliefs.
 
 Consensus detection:
   C_belief({i}, c) = 1 - (1/|{i}|²) Σ_ij KL(q_i || Ω_ij[q_j])
-  C_model({i}, c)  = 1 - (1/|{i}|²) Σ_ij KL(p_i || Ω̃_ij[p_j])
+  C_model({i}, c)  = 1 - (1/|{i}|²) Σ_ij KL(s_i || Ω̃_ij[s_j])
   Γ = C_belief · C_model · Presence > Γ_min
+
+Note: C_model uses s_i (model belief) NOT p_i (prior). The model fiber
+has its own gauge frame Ω̃_ij.
+
+For soft hierarchical emergence, see hierarchical_emergence.py.
 
 Reference: Dennis (2026), Sections 4.2–4.3
 """
@@ -60,12 +65,14 @@ class ConsensusDetector(nn.Module):
 
     @torch.no_grad()
     def model_coherence(self, system: MultiAgentSystem) -> Tensor:
-        """C_model = 1 - mean KL between gauge-transported priors.
+        """C_model = 1 - mean KL between gauge-transported model beliefs.
+
+        Uses s_i (model belief) with model transport Ω̃_ij, NOT p_i.
 
         Returns:
             (N, N) pairwise model coherence matrix
         """
-        E = system.pairwise_alignment_energies('prior')
+        E = system.pairwise_alignment_energies('model')
         while E.dim() > 2:
             E = E.mean(-1)
         return 1.0 - E
@@ -179,21 +186,29 @@ class MetaAgentFormation(nn.Module):
         K = system.K
         grid_shape = system.grid_shape
 
-        # Initialize accumulators
+        # Initialize accumulators for BOTH fibers
         mu_q_acc = torch.zeros_like(ref_agent.mu_q.data)
         sigma_q_acc = torch.zeros_like(ref_agent.sigma_q)
         mu_p_acc = torch.zeros_like(ref_agent.mu_p.data)
         sigma_p_acc = torch.zeros_like(ref_agent.sigma_p)
+        mu_s_acc = torch.zeros_like(ref_agent.mu_s.data)
+        sigma_s_acc = torch.zeros_like(ref_agent.sigma_s)
+        mu_r_acc = torch.zeros_like(ref_agent.mu_r.data)
+        sigma_r_acc = torch.zeros_like(ref_agent.sigma_r)
         omega_acc = torch.zeros_like(ref_agent.omega.data)
+        omega_model_acc = torch.zeros_like(ref_agent.omega_model.data)
         weight_sum = torch.tensor(0.0, device=mu_q_acc.device)
 
         ref_omega = ref_agent.omega.data
+        ref_omega_model = ref_agent.omega_model.data
 
         for idx in cluster_list:
             agent = system.agents[idx]
 
-            # Transport operator: Ω_{ref,idx} = Ω_ref @ Ω_idx⁻¹
+            # Belief transport: Ω_{ref,idx} = Ω_ref @ Ω_idx⁻¹
             omega_ij = ref_omega @ torch.linalg.inv(agent.omega.data)
+            # Model transport: Ω̃_{ref,idx} = Ω̃_ref @ Ω̃_idx⁻¹
+            omega_model_ij = ref_omega_model @ torch.linalg.inv(agent.omega_model.data)
 
             # Transport beliefs to reference frame
             mu_q_t = transport_mean(omega_ij, agent.mu_q.data)
@@ -201,32 +216,41 @@ class MetaAgentFormation(nn.Module):
             mu_p_t = transport_mean(omega_ij, agent.mu_p.data)
             sigma_p_t = transport_covariance(omega_ij, agent.sigma_p)
 
-            # Weight by coherence (simple uniform for now)
-            w = 1.0
+            # Transport model beliefs using MODEL transport
+            mu_s_t = transport_mean(omega_model_ij, agent.mu_s.data)
+            sigma_s_t = transport_covariance(omega_model_ij, agent.sigma_s)
+            mu_r_t = transport_mean(omega_model_ij, agent.mu_r.data)
+            sigma_r_t = transport_covariance(omega_model_ij, agent.sigma_r)
 
+            w = 1.0
             mu_q_acc += w * mu_q_t
             sigma_q_acc += w * sigma_q_t
             mu_p_acc += w * mu_p_t
             sigma_p_acc += w * sigma_p_t
+            mu_s_acc += w * mu_s_t
+            sigma_s_acc += w * sigma_s_t
+            mu_r_acc += w * mu_r_t
+            sigma_r_acc += w * sigma_r_t
             omega_acc += w * agent.omega.data
+            omega_model_acc += w * agent.omega_model.data
             weight_sum += w
 
         # Normalize
-        mu_q_avg = mu_q_acc / weight_sum
-        sigma_q_avg = sigma_q_acc / weight_sum
-        mu_p_avg = mu_p_acc / weight_sum
-        sigma_p_avg = sigma_p_acc / weight_sum
-        omega_avg = omega_acc / weight_sum
+        n = weight_sum
+        mu_q_avg = mu_q_acc / n
+        sigma_q_avg = sigma_q_acc / n
+        mu_p_avg = mu_p_acc / n
+        sigma_p_avg = sigma_p_acc / n
+        mu_s_avg = mu_s_acc / n
+        sigma_s_avg = sigma_s_acc / n
+        mu_r_avg = mu_r_acc / n
+        sigma_r_avg = sigma_r_acc / n
+        omega_avg = omega_acc / n
+        omega_model_avg = omega_model_acc / n
 
-        # Create meta-agent
-        meta = Agent(K, grid_shape, agent_id=-1)  # ID assigned later
+        # Create meta-agent with BOTH fibers
+        meta = Agent(K, grid_shape, agent_id=-1)
 
-        # Set parameters
-        meta.mu_q.data.copy_(mu_q_avg)
-        meta.mu_p.data.copy_(mu_p_avg)
-        meta.omega.data.copy_(omega_avg)
-
-        # Set Cholesky factors from averaged covariances (robust via eigh)
         def _robust_cholesky(S):
             S_sym = 0.5 * (S + S.transpose(-2, -1))
             evals, evecs = torch.linalg.eigh(S_sym)
@@ -234,8 +258,19 @@ class MetaAgentFormation(nn.Module):
             S_spd = evecs @ torch.diag_embed(evals) @ evecs.transpose(-2, -1)
             return torch.linalg.cholesky(S_spd)
 
+        # Belief fiber
+        meta.mu_q.data.copy_(mu_q_avg)
         meta._L_q.data.copy_(_robust_cholesky(sigma_q_avg))
+        meta.mu_p.data.copy_(mu_p_avg)
         meta._L_p.data.copy_(_robust_cholesky(sigma_p_avg))
+        meta.omega.data.copy_(omega_avg)
+
+        # Model fiber
+        meta.mu_s.data.copy_(mu_s_avg)
+        meta._L_s.data.copy_(_robust_cholesky(sigma_s_avg))
+        meta.mu_r.data.copy_(mu_r_avg)
+        meta._L_r.data.copy_(_robust_cholesky(sigma_r_avg))
+        meta.omega_model.data.copy_(omega_model_avg)
 
         return meta
 
