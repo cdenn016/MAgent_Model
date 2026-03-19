@@ -422,7 +422,7 @@ class FullVFE(nn.Module):
         return energy.sum()
 
     # ─────────────────────────────────────────────────────────
-    # T6: Hyperprior terms from Ouroboros tower
+    # T6: Hyperprior terms from hierarchical emergence
     # ─────────────────────────────────────────────────────────
 
     def hyperprior_term(self, system: MultiAgentSystem,
@@ -434,7 +434,7 @@ class FullVFE(nn.Module):
         Hyperprior penalty: each agent's prior is penalized for deviating
         from transported beliefs of ancestors at depths 1..D.
 
-        The ancestor structure comes from the Ouroboros tower:
+        The ancestor structure comes from the hierarchical emergence:
           ancestors[0] = {child_id: parent_agent}     (depth 1, parent)
           ancestors[1] = {child_id: grandparent_agent} (depth 2)
           ...
@@ -692,7 +692,7 @@ class FullVFE(nn.Module):
 
         # ── OPTIONAL EXTENSIONS (off by default) ──
 
-        # Hyperpriors from Ouroboros tower (Section 4.4)
+        # Hyperpriors from hierarchical emergence (Section 4.4)
         T6 = torch.tensor(0.0, device=device)
         if self.lambda_hyper > 0 and ancestors is not None and len(ancestors) > 0:
             T6 = self.hyperprior_term(system, ancestors, chi_all, vol)
@@ -751,7 +751,7 @@ class FullVFE(nn.Module):
 
 
 class HierarchicalVFE(nn.Module):
-    """Full VFE across the entire Ouroboros tower.
+    """Full VFE across the entire hierarchical emergence.
 
     Computes the sum of per-scale VFE plus inter-scale hyperprior terms:
 
@@ -778,7 +778,7 @@ class HierarchicalVFE(nn.Module):
         """Compute VFE across all scales in the tower.
 
         Args:
-            scales: list of HierarchicalScale objects from OuroborosTower
+            scales: list of HierarchicalScale objects from hierarchicalTower
             observations: scale-0 observations
             obs_precision: observation precision
             model_priors: fixed model hyperpriors for scale-0 agents

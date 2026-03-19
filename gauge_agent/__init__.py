@@ -15,8 +15,8 @@ Layers (bottom-up):
   6. dynamics        — Natural gradient flow, Hamiltonian dynamics
   7. meta_agents     — Consensus detection, meta-agent formation
   8. pullback        — Induced Fisher metrics, sector decomposition
-  9. ouroboros       — Multi-scale tower with top-down feedback
-  10. mass           — Mass matrix, kinetic energy, M = Σ_p⁻¹
+  9. hierarchical_emergence — Species-gated soft hierarchy
+  10. mass           — Information-geometric mass M = ∂²F/∂ξ²
 
 Reference: Dennis (2026), "A Theoretical and Computational Implementation
 of a Participatory 'It From Bit' Universe"

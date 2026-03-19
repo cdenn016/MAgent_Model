@@ -1,7 +1,7 @@
 """
 Comprehensive test and validation of the gauge-theoretic multi-agent framework.
 
-Tests each layer bottom-up, then runs a full Ouroboros tower simulation
+Tests each layer bottom-up, then runs a full hierarchical emergence simulation
 matching the manuscript's configuration (Table 1):
   - 8 agents, K=13, 0D base manifold
   - GL(K) gauge group (not restricted to SO(3))
@@ -367,17 +367,18 @@ print("  ✓ Mass matrix validated")
 
 
 # ============================================================
-# Full Integration: Ouroboros Tower
+# Full Integration: Hierarchical Emergence + Wheeler Closure
 # ============================================================
 print("\n" + "=" * 70)
-print("[FULL] Ouroboros Tower Simulation")
+print("[FULL] Hierarchical Emergence with Self-Referential Closure")
 print("=" * 70)
 
-from gauge_agent.ouroboros import OuroborosTower
+from gauge_agent.hierarchical_emergence import HierarchicalEmergence
+from gauge_agent.full_vfe import FullVFE
+from gauge_agent.dynamics import NaturalGradientDynamics
 
 torch.manual_seed(2)
 
-# Match manuscript configuration (Table 1)
 base_system = MultiAgentSystem(
     N_agents=8, K=13, grid_shape=(),
     init_belief_scale=1.0,
@@ -385,40 +386,26 @@ base_system = MultiAgentSystem(
     init_gauge_scale=0.1,
 )
 
-fe_tower = FreeEnergyFunctional(
-    lambda_self=1.0,
-    lambda_belief=1.0,
-    lambda_prior=1.0,
-    lambda_obs=1.0,
-    temperature=1.0,
-    use_observations=False,
-)
-
-tower = OuroborosTower(
+hierarchy = HierarchicalEmergence(
     base_system=base_system,
-    free_energy=fe_tower,
-    max_scales=25,
-    max_agents=200,
-    consensus_check_interval=2,
-    kl_threshold=0.05,
-    hyperprior_depth=5,
-    hyperprior_decay=0.5,
-    lr_mu_q=0.05,
-    lr_sigma_q=0.0075,
-    lr_mu_p=0.02,
-    lr_sigma_p=0.0075,
-    lr_omega=0.01,
+    n_meta_per_scale=[4, 2, 1],
+    tau_species=5.0, tau_belief=1.0,
 )
 
-# Run 50 steps (abbreviated for test; manuscript uses 500)
-history = tower.evolve(n_steps=50, verbose=True)
+vfe = FullVFE(adaptive_precision=True)
+dynamics = NaturalGradientDynamics(base_system, vfe, lr_mu_q=0.05)
+
+for t in range(50):
+    info = dynamics.step()
+    hierarchy.update_meta_agents()
+    hierarchy.self_referential_closure()
+    if t % 10 == 0:
+        ne = hierarchy.non_equilibrium_score()
+        print(f"  Step {t:4d} | VFE={info['total']:.4f} | NE={ne['ne_score']:.4f}")
 
 print(f"\nFinal state:")
-print(f"  Scales:       {tower.n_scales}")
-print(f"  Total agents: {tower.total_agents}")
-if history:
-    last = history[-1]
-    print(f"  NE score:     {last.get('ne_score', 0):.4f}")
+print(f"  Levels: {hierarchy.n_levels}")
+print(f"  {hierarchy.summary_string()}")
 
 print("\n" + "=" * 70)
 print("ALL LAYERS VALIDATED SUCCESSFULLY")
@@ -434,5 +421,5 @@ print(f"  ├── attention.py            [Softmax attention from KL]")
 print(f"  ├── dynamics.py             [Natural gradient + Hamiltonian]")
 print(f"  ├── meta_agents.py          [Consensus, meta-agent formation]")
 print(f"  ├── pullback.py             ['It from Bit' induced metrics]")
-print(f"  ├── ouroboros.py            [Multi-scale tower + feedback]")
+print(f"  ├── hierarchical_emergence.py [Species-gated soft hierarchy + Wheeler closure]")
 print(f"  └── mass.py                 [Mass = precision, Hamiltonian]")

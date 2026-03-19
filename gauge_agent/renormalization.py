@@ -405,7 +405,9 @@ class RenormalizationGroupFlow(nn.Module):
                  n_equilibrate: int = 50,
                  max_scales: int = 20,
                  kl_threshold: float = 0.1,
-                 lr: float = 0.02):
+                 lr: float = 0.02,
+                 adaptive_precision: bool = False,
+                 free_energy=None):
         super().__init__()
         self.N_agents_initial = N_agents
         self.K = K
@@ -416,11 +418,14 @@ class RenormalizationGroupFlow(nn.Module):
         self.max_scales = max_scales
         self.lr = lr
 
-        self.free_energy = FreeEnergyFunctional(
-            lambda_self=1.0, lambda_belief=1.0,
-            lambda_prior=0.5, temperature=1.0,
-            use_observations=False
-        )
+        # Use FullVFE if provided, else create one
+        if free_energy is not None:
+            self.free_energy = free_energy
+        else:
+            from gauge_agent.full_vfe import FullVFE
+            self.free_energy = FullVFE(
+                adaptive_precision=adaptive_precision,
+            )
 
         self.consensus = ConsensusDetector(
             kl_threshold=kl_threshold,
@@ -481,12 +486,25 @@ class RenormalizationGroupFlow(nn.Module):
         N_new = len(meta_agents)
         new_system = MultiAgentSystem(N_new, self.K, self.grid_shape)
         for i, meta in enumerate(meta_agents):
-            new_system.agents[i].mu_q.data.copy_(meta.mu_q.data)
-            new_system.agents[i]._L_q.data.copy_(meta._L_q.data)
-            new_system.agents[i].mu_p.data.copy_(meta.mu_p.data)
-            new_system.agents[i]._L_p.data.copy_(meta._L_p.data)
-            new_system.agents[i].omega.data.copy_(meta.omega.data)
-            new_system.agents[i].agent_id = i
+            dst = new_system.agents[i]
+            # Belief fiber
+            dst.mu_q.data.copy_(meta.mu_q.data)
+            dst._L_q.data.copy_(meta._L_q.data)
+            dst.mu_p.data.copy_(meta.mu_p.data)
+            dst._L_p.data.copy_(meta._L_p.data)
+            dst.omega.data.copy_(meta.omega.data)
+            # Model fiber
+            dst.mu_s.data.copy_(meta.mu_s.data)
+            dst._L_s.data.copy_(meta._L_s.data)
+            dst.mu_r.data.copy_(meta.mu_r.data)
+            dst._L_r.data.copy_(meta._L_r.data)
+            dst.omega_model.data.copy_(meta.omega_model.data)
+            # Precision hyperparameters (model fiber)
+            dst._log_b0.data.copy_(meta._log_b0.data)
+            dst._log_c0.data.copy_(meta._log_c0.data)
+            dst._log_b0_model.data.copy_(meta._log_b0_model.data)
+            dst._log_c0_model.data.copy_(meta._log_c0_model.data)
+            dst.agent_id = i
 
         return blocks, new_system
 

@@ -297,32 +297,48 @@ class NaturalGradientDynamics(nn.Module):
 
 
 class HamiltonianDynamics(nn.Module):
-    """Second-order Hamiltonian dynamics (underdamped).
+    """Second-order Hamiltonian dynamics with information-geometric mass.
 
     H = T + V where:
-      T = (1/2) μ̇^T M μ̇ + (1/4) tr(Σ⁻¹ Σ̇ Σ⁻¹ Σ̇)  [kinetic]
-      V = S[q, p, Ω]                                      [potential = free energy]
+      T = (1/2) μ̇^T M⁻¹ μ̇                    [kinetic — mass from Eq. 37]
+      V = S[q, p, Ω]                           [potential = free energy]
 
-    Mass matrix M = Σ_p⁻¹ (prior precision = inertial mass).
+    Mass (Eq. 37):
+      M_i = Λ̄_p + Σ_k β_ik Λ̃_qk + Σ_j β_ji Λ_qi + Λ_oi
+            ────   ────────────   ──────────────   ────
+            bare   incoming       outgoing          sensory
+                   relational     recoil
+
+    Mass = Precision: certain agents are massive (hard to move),
+    uncertain agents are light (fast dynamics). This is the
+    information-geometric kinetic energy.
+
+    When use_full_mass=False, falls back to simple M = Σ_p⁻¹.
 
     Reference: Dennis (2026), Section 3 (Mass from Statistical Precision)
 
     Args:
         system: MultiAgentSystem
-        free_energy: any callable VFE (FullVFE or FreeEnergyFunctional)
+        free_energy: any callable VFE
+        mass_matrix: MassMatrix for full Eq. 37 mass (optional)
         dt: integration timestep
         damping: friction coefficient (0 = conservative, >0 = dissipative)
+        use_full_mass: if True, use Eq. 37 mass. If False, simple Σ_p⁻¹.
     """
 
     def __init__(self, system: MultiAgentSystem,
                  free_energy,
+                 mass_matrix=None,
                  dt: float = 0.01,
-                 damping: float = 0.0):
+                 damping: float = 0.0,
+                 use_full_mass: bool = False):
         super().__init__()
         self.system = system
         self.free_energy = free_energy
+        self.mass_matrix = mass_matrix
         self.dt = dt
         self.damping = damping
+        self.use_full_mass = use_full_mass and mass_matrix is not None
 
         # Initialize momenta (conjugate to mu_q)
         self.momenta = {}
@@ -331,10 +347,41 @@ class HamiltonianDynamics(nn.Module):
                 'p_mu': torch.zeros_like(agent.mu_q.data),
             }
 
+    def _compute_mass_inv(self, beta=None, obs_precision=None):
+        """Compute M⁻¹ for each agent.
+
+        Full mass (Eq. 37): M_i = Λ̄_p + relational + recoil + sensory
+        Simple mass: M_i = Σ_p⁻¹, so M⁻¹ = Σ_p
+
+        Returns:
+            List of (K, K) or (*grid, K, K) mass inverse matrices per agent
+        """
+        if self.use_full_mass:
+            # Full information-geometric mass (Eq. 37)
+            M_diag = self.mass_matrix.effective_mass_diagonal(
+                beta=beta, obs_precision=obs_precision
+            )  # (N, K, K) or (N, *grid, K, K)
+            # M⁻¹ via solve
+            mass_inv_list = []
+            for i in range(len(self.system.agents)):
+                M_i = M_diag[i]
+                # Symmetrize and regularize for inversion
+                M_sym = 0.5 * (M_i + M_i.transpose(-2, -1))
+                evals, evecs = torch.linalg.eigh(M_sym)
+                evals = evals.clamp(min=1e-4)
+                M_inv = evecs @ torch.diag_embed(1.0 / evals) @ evecs.transpose(-2, -1)
+                mass_inv_list.append(M_inv)
+            return mass_inv_list
+        else:
+            # Simple: M⁻¹ = Σ_p
+            return [agent.sigma_p.detach() for agent in self.system.agents]
+
     def step(self, observations=None, obs_precision=None) -> Dict:
         """Symplectic (leapfrog) integration step.
 
-        Preserves the symplectic structure of the Hamiltonian flow.
+        Uses information-geometric mass M (Eq. 37) when available:
+          M_i = prior precision + relational + recoil + sensory
+          Heavier agents (more certain) are harder to move.
 
         Returns:
             Dict with kinetic energy, potential energy, total energy
@@ -347,28 +394,27 @@ class HamiltonianDynamics(nn.Module):
         V = result['total']
         V.backward()
 
+        # Get beta for mass computation
+        beta = result.get('beta', None)
+
         with torch.no_grad():
             kinetic = torch.tensor(0.0)
             for agent in self.system.agents:
                 mom = self.momenta[agent.agent_id]
-
                 if agent.mu_q.grad is not None:
-                    # Half kick
                     mom['p_mu'] -= half_dt * agent.mu_q.grad
-                    # Apply damping
                     mom['p_mu'] *= (1.0 - self.damping * half_dt)
 
             self.system.zero_grad()
 
             # --- Full position update: q ← q + dt M⁻¹ p ---
-            for agent in self.system.agents:
+            mass_inv_list = self._compute_mass_inv(beta, obs_precision)
+
+            for i, agent in enumerate(self.system.agents):
                 mom = self.momenta[agent.agent_id]
-                # Mass = Σ_p⁻¹, so M⁻¹ = Σ_p
-                mass_inv = agent.sigma_p.detach()
+                mass_inv = mass_inv_list[i]
                 velocity = (mass_inv @ mom['p_mu'].unsqueeze(-1)).squeeze(-1)
                 agent.mu_q.data += dt * velocity
-
-                # Kinetic energy: (1/2) p^T M⁻¹ p
                 kinetic = kinetic + 0.5 * (mom['p_mu'] * velocity).sum()
 
         # --- Second half-step momentum update ---
@@ -391,5 +437,6 @@ class HamiltonianDynamics(nn.Module):
             'total_energy': kinetic.item() + V2.item(),
             **{k: v.item() if isinstance(v, Tensor) and v.dim() == 0 else v
                for k, v in result2.items()
-               if k not in ('beta', 'gamma', 'E_belief_pairwise', 'E_prior_pairwise')}
+               if k not in ('beta', 'gamma', 'E_belief_pairwise', 'E_model_pairwise',
+                            'alpha_belief', 'alpha_model')}
         }

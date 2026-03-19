@@ -64,7 +64,8 @@ class ManifoldAgentSystem(nn.Module):
                  init_twist_scale: float = 0.05,
                  support_radius: Optional[float] = None,
                  support_sharpness: float = 5.0,
-                 ym_coupling: float = 0.1):
+                 ym_coupling: float = 0.1,
+                 adaptive_precision: bool = False):
         super().__init__()
         self.N_agents = N_agents
         self.K = K
@@ -98,12 +99,13 @@ class ManifoldAgentSystem(nn.Module):
         # Wilson action for Yang-Mills regularization
         self.wilson_action = WilsonAction(self.gauge_field, ym_coupling)
 
-        # Full VFE (all 8 terms)
+        # Full VFE (all 8 terms + adaptive precision)
         self.vfe = FullVFE(
             lambda_self=1.0, lambda_model_self=0.5,
             lambda_belief=1.0, lambda_model=0.5,
             lambda_obs=1.0, lambda_smooth=0.01,
             lambda_ym=ym_coupling, lambda_hyper=0.5,
+            adaptive_precision=adaptive_precision,
         )
 
     def _sync_frames_to_gauge(self):

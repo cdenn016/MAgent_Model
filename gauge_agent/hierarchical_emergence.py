@@ -945,6 +945,126 @@ class HierarchicalEmergence(nn.Module):
 
         return info
 
+    # ─────────────────────────────────────────────────────────
+    #  Wheelerian Self-Referential Closure
+    # ─────────────────────────────────────────────────────────
+
+    @torch.no_grad()
+    def self_referential_closure(self):
+        """Wheeler's "self-excited circuit" at the apex.
+
+        The top-scale meta-agents observe the ENTIRE system and form
+        priors by gauge-transported precision-weighted averaging:
+
+            p_top(c) = Σ_{all agents j} w_j · Ω_{top,j}[q_j](c)
+
+        where w_j ∝ 1/(1 + KL(q_j || p_j)) — coherent agents contribute more.
+
+        This creates the participatory closure: system observes itself,
+        forms collective priors that flow down to shape individual beliefs,
+        whose evolution changes the collective state.
+
+        Only acts when hierarchy has ≥ 2 levels.
+        """
+        if self.n_levels < 2:
+            return
+
+        top = self.scales[-1]
+
+        # Gather all beliefs across ALL scales
+        all_mu = []
+        all_sigma = []
+        all_omega = []
+        all_weights = []
+
+        for scale in self.scales:
+            for agent in scale.agents:
+                all_mu.append(agent.mu_q.data)
+                all_sigma.append(agent.sigma_q.detach())
+                all_omega.append(agent.omega.data)
+                # Coherence weight: trust agents close to their prior
+                kl = gaussian_kl(
+                    agent.mu_q.data.unsqueeze(0), agent.sigma_q.detach().unsqueeze(0),
+                    agent.mu_p.data.unsqueeze(0), agent.sigma_p.detach().unsqueeze(0),
+                )
+                # Reduce to scalar if spatial
+                w = 1.0 / (1.0 + kl.mean().item())
+                all_weights.append(w)
+
+        if not all_mu:
+            return
+
+        w_total = sum(all_weights)
+        if w_total < 1e-10:
+            return
+
+        # Set top-scale priors from weighted system observation
+        for top_agent in top.agents:
+            mu_acc = torch.zeros_like(top_agent.mu_p.data)
+
+            for mu_j, omega_j, w_j in zip(all_mu, all_omega, all_weights):
+                omega_tj = top_agent.omega.data @ torch.linalg.inv(omega_j)
+                mu_t = (omega_tj @ mu_j.unsqueeze(-1)).squeeze(-1)
+                mu_acc += (w_j / w_total) * mu_t
+
+            top_agent.mu_p.data.copy_(mu_acc)
+
+    # ─────────────────────────────────────────────────────────
+    #  Non-Equilibrium Monitoring
+    # ─────────────────────────────────────────────────────────
+
+    def non_equilibrium_score(self, free_energy=None) -> Dict[str, float]:
+        """Track non-equilibrium indicators across the hierarchy.
+
+        Monitors:
+          - Energy flux |dS/dt| per scale
+          - Energy variance across scales
+          - Composite NE score
+
+        Non-equilibrium is GOOD — it means the system is alive,
+        adapting, not trapped in epistemic death.
+
+        Args:
+            free_energy: callable VFE (if None, uses cross-scale energy)
+        Returns:
+            Dict with energy_flux, energy_variance, ne_score
+        """
+        current_energies = []
+        for scale in self.scales:
+            if free_energy is not None:
+                result = free_energy(scale)
+                current_energies.append(result['total'].item())
+            else:
+                # Use a simple proxy: mean KL(q||p) at this scale
+                mu_q = scale.get_all_mu_q()
+                sigma_q = scale.get_all_sigma_q()
+                mu_p = scale.get_all_mu_p()
+                sigma_p = scale.get_all_sigma_p()
+                kl = gaussian_kl(mu_q, sigma_q, mu_p, sigma_p)
+                current_energies.append(kl.mean().item())
+
+        energy_variance = 0.0
+        if len(current_energies) > 1:
+            mean_e = sum(current_energies) / len(current_energies)
+            energy_variance = sum((e - mean_e)**2 for e in current_energies) / len(current_energies)
+
+        # Store for flux computation
+        energy_flux = 0.0
+        if hasattr(self, '_prev_energies') and self._prev_energies is not None:
+            if len(self._prev_energies) == len(current_energies):
+                diffs = [abs(c - p) for c, p in zip(current_energies, self._prev_energies)]
+                energy_flux = sum(diffs)
+        self._prev_energies = current_energies
+
+        ne_score = (energy_flux + energy_variance) / 2.0
+
+        return {
+            'energy_flux': energy_flux,
+            'energy_variance': energy_variance,
+            'ne_score': ne_score,
+            'scale_energies': current_energies,
+        }
+
     def summary_string(self) -> str:
         """One-line summary of hierarchy state."""
         diag = self.diagnostics()
