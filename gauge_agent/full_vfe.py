@@ -63,104 +63,60 @@ from gauge_agent.statistical_manifold import gaussian_kl
 from gauge_agent.agents import Agent, MultiAgentSystem
 
 
-class AdaptivePrecision(nn.Module):
+def adaptive_precision(kl: Tensor, b0: Tensor, c0: Tensor,
+                       chi: Optional[Tensor] = None,
+                       vol: Optional[Tensor] = None) -> Dict[str, Tensor]:
     """State-dependent precision via log barrier (Section 2.11.2).
 
-    The self-coupling weight α_i is NOT a fixed constant — it adapts
-    to context via the log barrier regularizer:
+    Per-agent, context-dependent precision:
 
-        R(α) = b₀·α - c₀·log(α)
+        α_i*(x) = c₀_i / (b₀_i + KL_i(x))
+        R(α_i) = b₀_i·α_i - c₀_i·log(α_i)
 
-    The optimal α at each point x on the base manifold:
+    b₀_i, c₀_i are PER-AGENT and live on the model fiber.
+    They evolve slowly (×ε) — part of the agent's genotype:
+        - Specialist: high c₀/b₀ (strong prior trust)
+        - Generalist: low c₀/b₀ (flexible)
 
-        α_i*(x) = c₀ / (b₀ + KL(q_i(x) || p_i(x)))
-
-    Physical meaning:
-        - Near prior (KL ≈ 0): α ≈ c₀/b₀ (high, trusts prior)
-        - Far from prior (KL large): α → 0 (low, prior loosened)
-        - This IS precision-weighting in predictive coding
-
-    The log barrier prevents degenerate solutions:
-        - α → 0: log barrier → -∞ (forbidden)
-        - α → ∞: linear penalty dominates (bounded)
-
-    Both b₀ and c₀ are per-agent. They live on the model fiber
-    (part of what kind of thing you are) and evolve slowly (×ε).
-
-    α_i(x) is a FIELD over the base manifold, like β_ij(x).
-    It varies spatially because KL(q_i || p_i) varies spatially.
+    α_i(x) is a FIELD — varies pointwise because KL varies pointwise.
+    Gradients flow through b₀_i, c₀_i to the model fiber.
 
     Args:
-        b0: barrier sensitivity (large → nearly constant α)
-        c0: barrier strength (c₀/b₀ = max precision when KL=0)
-        use_barrier_regularizer: if True, include R(α) in the VFE
+        kl: (N, *grid) KL divergence field per agent
+        b0: (N,) per-agent barrier sensitivity
+        c0: (N,) per-agent barrier strength
+        chi: (N, *grid) optional support
+        vol: (*grid) optional volume form
+    Returns:
+        Dict with weighted_kl, regularizer, alpha, total
     """
+    # Broadcast b0, c0 to (N, 1, 1, ...) for grid dimensions
+    b0_exp = b0.view(-1, *((1,) * (kl.dim() - 1)))
+    c0_exp = c0.view(-1, *((1,) * (kl.dim() - 1)))
 
-    def __init__(self, b0: float = 1.0, c0: float = 1.0,
-                 use_barrier_regularizer: bool = True):
-        super().__init__()
-        self.b0 = b0
-        self.c0 = c0
-        self.use_barrier_regularizer = use_barrier_regularizer
+    alpha = c0_exp / (b0_exp + kl.clamp(min=0))  # (N, *grid)
 
-    def alpha(self, kl: Tensor) -> Tensor:
-        """Compute optimal state-dependent precision α*(x).
+    weighted_kl = alpha * kl
+    if chi is not None:
+        weighted_kl = weighted_kl * chi
+    if vol is not None:
+        weighted_kl = weighted_kl * vol
+    weighted_kl_sum = weighted_kl.sum()
 
-        α*(x) = c₀ / (b₀ + KL(x))
+    # Log barrier: R(α_i) = b₀_i·α_i - c₀_i·log(α_i)
+    reg = b0_exp * alpha - c0_exp * torch.log(alpha.clamp(min=1e-8))
+    if chi is not None:
+        reg = reg * chi
+    if vol is not None:
+        reg = reg * vol
+    reg_sum = reg.sum()
 
-        Args:
-            kl: (...) KL divergence field (non-negative)
-        Returns:
-            (...) precision field α(x) > 0
-        """
-        return self.c0 / (self.b0 + kl.clamp(min=0))
-
-    def regularizer(self, alpha: Tensor) -> Tensor:
-        """Log barrier regularizer R(α) = b₀·α - c₀·log(α).
-
-        Args:
-            alpha: (...) precision values (must be > 0)
-        Returns:
-            (...) regularizer values
-        """
-        return self.b0 * alpha - self.c0 * torch.log(alpha.clamp(min=1e-8))
-
-    def forward(self, kl: Tensor,
-                chi: Optional[Tensor] = None,
-                vol: Optional[Tensor] = None) -> Dict[str, Tensor]:
-        """Compute α-weighted self-consistency + barrier regularizer.
-
-        Returns:
-            Dict with:
-                'weighted_kl': Σ_i ∫ χ_i α_i(x) KL_i(x) √|g| dx
-                'regularizer': Σ_i ∫ R(α_i(x)) √|g| dx  (or 0)
-                'alpha': (N, *grid) precision field
-                'total': weighted_kl + regularizer
-        """
-        alpha = self.alpha(kl)  # (N, *grid)
-
-        weighted_kl = alpha * kl  # (N, *grid)
-        if chi is not None:
-            weighted_kl = weighted_kl * chi
-        if vol is not None:
-            weighted_kl = weighted_kl * vol
-        weighted_kl_sum = weighted_kl.sum()
-
-        reg_sum = torch.tensor(0.0, device=kl.device)
-        if self.use_barrier_regularizer:
-            reg = self.regularizer(alpha)
-            if chi is not None:
-                reg = reg * chi
-            if vol is not None:
-                reg = reg * vol
-            reg_sum = reg.sum()
-
-        return {
-            'weighted_kl': weighted_kl_sum,
-            'regularizer': reg_sum,
-            'alpha': alpha,
-            'total': weighted_kl_sum + reg_sum,
-        }
+    return {
+        'weighted_kl': weighted_kl_sum,
+        'regularizer': reg_sum,
+        'alpha': alpha,
+        'total': weighted_kl_sum + reg_sum,
+    }
 
 
 class FullVFE(nn.Module):
@@ -233,14 +189,14 @@ class FullVFE(nn.Module):
         self.hyperprior_depth = hyperprior_depth
 
         # Adaptive precision (Section 2.11.2)
+        # When True, reads per-agent b₀, c₀ from agent.b0, agent.c0
+        # These live on the model fiber and evolve with ε
         self.adaptive_precision = adaptive_precision
-        if adaptive_precision:
-            self.belief_precision = AdaptivePrecision(
-                b0=b0_belief, c0=c0_belief
-            )
-            self.model_precision = AdaptivePrecision(
-                b0=b0_model, c0=c0_model
-            )
+        # Fallback defaults if agents don't have b0/c0
+        self._b0_belief_default = b0_belief
+        self._c0_belief_default = c0_belief
+        self._b0_model_default = b0_model
+        self._c0_model_default = c0_model
 
     # ─────────────────────────────────────────────────────────
     # Attention weights (softmax over KL divergence)
@@ -295,8 +251,10 @@ class FullVFE(nn.Module):
         kl = gaussian_kl(mu_q, sigma_q, mu_p, sigma_p)  # (N, *grid)
 
         if self.adaptive_precision:
-            result = self.belief_precision(kl, chi, vol)
-            return result
+            # Per-agent b₀, c₀ from model fiber
+            b0 = torch.stack([a.b0 for a in system.agents])  # (N,)
+            c0 = torch.stack([a.c0 for a in system.agents])  # (N,)
+            return adaptive_precision(kl, b0, c0, chi, vol)
         else:
             if chi is not None:
                 kl = kl * chi
@@ -332,8 +290,9 @@ class FullVFE(nn.Module):
         kl = gaussian_kl(mu_s, sigma_s, mu_r, sigma_r)  # (N, *grid)
 
         if self.adaptive_precision:
-            result = self.model_precision(kl, chi, vol)
-            return result
+            b0 = torch.stack([a.b0_model for a in system.agents])  # (N,)
+            c0 = torch.stack([a.c0_model for a in system.agents])  # (N,)
+            return adaptive_precision(kl, b0, c0, chi, vol)
         else:
             if chi is not None:
                 kl = kl * chi
