@@ -2,17 +2,26 @@
 Layer 6: Natural Gradient Dynamics on the Product Manifold
 ===========================================================
 
-The system evolves via natural gradient flow:
-  dμ_i/dt  = -η_μ  Σ_i (∇_μ S)           [fast: belief updates]
-  dΣ_i/dt  = -η_Σ  Σ_i (∇_Σ S) Σ_i       [fast: uncertainty updates]
-  dμ_p/dt  = -η_μp Σ_p (∇_μp S)           [slow: prior/model learning]
-  dΣ_p/dt  = -η_Σp Σ_p (∇_Σp S) Σ_p      [slow: prior uncertainty]
-  dΩ_i/dt  = -η_Ω  ∇_Ω S                  [very slow: gauge frame]
+Three timescales (adiabatic approximation):
 
-The natural gradient ∇̃ = G⁻¹∇ uses the Fisher-Rao metric G,
-ensuring steepest descent in the intrinsic geometry of SPD(K).
+  FAST — belief fiber (inference within a lifetime):
+    dμ_q/dt  = -η_μ  Σ_q ∇_{μ_q} S        [perception]
+    dΣ_q/dt  = -η_Σ  Σ_q (∇_Σ S) Σ_q      [uncertainty]
+    dμ_p/dt  = -η_p  Σ_p ∇_{μ_p} S         [expectation learning]
+    dΩ_i/dt  = -η_Ω  ∇_Ω S                 [reference frame]
 
-Timescale separation: η_μ >> η_p >> η_Ω (adiabatic approximation).
+  SLOW — model fiber (evolution across generations, ε << 1):
+    dμ_s/dt  = -ε·η_s Σ_s ∇_{μ_s} S       [model evolution]
+    dΣ_s/dt  = -ε·η_Σs Σ_s (∇ S) Σ_s      [model uncertainty]
+    dμ_r/dt  = -ε·η_r Σ_r ∇_{μ_r} S       [model prior drift]
+    dΩ̃_i/dt  = -ε·η_Ω̃  ∇_{Ω̃} S            [model gauge frame]
+
+The model fiber IS the genome (metaphorically). It changes via
+selection pressure, not within-lifetime learning. The ratio ε
+controls the timescale separation:
+  ε = 1.0  → model and belief evolve at same rate (no separation)
+  ε = 0.01 → model evolves 100x slower (biological timescale)
+  ε = 0.0  → model is frozen (pure inference, no evolution)
 
 Reference: Dennis (2026), Sections 2.12, 6.2
 """
@@ -30,19 +39,34 @@ from gauge_agent.statistical_manifold import ensure_spd
 class NaturalGradientDynamics(nn.Module):
     """Natural gradient descent on the product manifold.
 
-    M = (ℝ^K × SPD(K) × GL(K))^N
+    TWO fibers with timescale separation:
 
-    Uses PyTorch autograd for Euclidean gradients, then applies
-    the Fisher-Rao metric inverse to get natural gradients.
+    FAST (belief fiber — inference):
+      dμ_q/dt = -lr_mu_q · Σ_q ∇S     dΩ/dt = -lr_omega · ∇S
+
+    SLOW (model fiber — evolution, scaled by ε = model_lr_ratio):
+      dμ_s/dt = -ε·lr_mu_s · Σ_s ∇S   dΩ̃/dt = -ε·lr_omega_model · ∇S
+
+    The model fiber IS the genome. ε << 1 means models evolve slowly,
+    like biological evolution. ε = 0 freezes the model (pure inference).
 
     Args:
         system: MultiAgentSystem to evolve
         free_energy: FreeEnergyFunctional
         lr_mu_q: learning rate for belief means (fast)
         lr_sigma_q: learning rate for belief covariances (fast)
-        lr_mu_p: learning rate for prior means (slow)
-        lr_sigma_p: learning rate for prior covariances (slow)
-        lr_omega: learning rate for gauge frames (very slow)
+        lr_mu_p: learning rate for prior means (medium)
+        lr_sigma_p: learning rate for prior covariances (medium)
+        lr_omega: learning rate for belief gauge frames
+        model_lr_ratio: ε — ratio of model to belief learning rate.
+                        0.01 = model evolves 100x slower (default).
+                        0.0 = model frozen (pure inference).
+                        1.0 = no timescale separation.
+        lr_mu_s: base learning rate for model means (multiplied by ε)
+        lr_sigma_s: base learning rate for model covariances (×ε)
+        lr_mu_r: base learning rate for model prior means (×ε)
+        lr_sigma_r: base learning rate for model prior covariances (×ε)
+        lr_omega_model: base learning rate for model gauge frames (×ε)
         use_natural_gradient: if True, apply Fisher metric correction
         sigma_min: minimum covariance eigenvalue (prevents collapse)
     """
@@ -55,16 +79,33 @@ class NaturalGradientDynamics(nn.Module):
                  lr_mu_p: float = 0.02,
                  lr_sigma_p: float = 0.0075,
                  lr_omega: float = 0.01,
+                 model_lr_ratio: float = 0.01,
+                 lr_mu_s: float = 0.05,
+                 lr_sigma_s: float = 0.0075,
+                 lr_mu_r: float = 0.02,
+                 lr_sigma_r: float = 0.0075,
+                 lr_omega_model: float = 0.01,
                  use_natural_gradient: bool = True,
                  sigma_min: float = 1e-4):
         super().__init__()
         self.system = system
         self.free_energy = free_energy
+
+        # Belief fiber (fast)
         self.lr_mu_q = lr_mu_q
         self.lr_sigma_q = lr_sigma_q
         self.lr_mu_p = lr_mu_p
         self.lr_sigma_p = lr_sigma_p
         self.lr_omega = lr_omega
+
+        # Model fiber (slow — all rates multiplied by ε)
+        self.model_lr_ratio = model_lr_ratio  # ε
+        self.lr_mu_s = lr_mu_s
+        self.lr_sigma_s = lr_sigma_s
+        self.lr_mu_r = lr_mu_r
+        self.lr_sigma_r = lr_sigma_r
+        self.lr_omega_model = lr_omega_model
+
         self.use_natural_gradient = use_natural_gradient
         self.sigma_min = sigma_min
 
@@ -95,14 +136,17 @@ class NaturalGradientDynamics(nn.Module):
                 for k, v in result.items() if k not in ('beta', 'gamma', 'E_belief_pairwise', 'E_prior_pairwise')}
         info['grad_norms'] = {}
 
-        # Update each agent
+        ε = self.model_lr_ratio
+
+        # Update each agent — BOTH fibers
         with torch.no_grad():
             for agent in self.system.agents:
-                # --- Belief mean: dμ_q = -η Σ_q ∇_μ S ---
+                # ── FAST: Belief fiber (inference) ──
+
+                # μ_q: dμ_q = -η Σ_q ∇S
                 if agent.mu_q.grad is not None:
                     grad = agent.mu_q.grad.clamp(-10.0, 10.0)
                     if self.use_natural_gradient:
-                        # Natural gradient: Σ @ grad
                         sigma = agent.sigma_q.detach()
                         nat_grad = (sigma @ grad.unsqueeze(-1)).squeeze(-1)
                     else:
@@ -110,13 +154,13 @@ class NaturalGradientDynamics(nn.Module):
                     agent.mu_q.data -= self.lr_mu_q * nat_grad
                     info['grad_norms']['mu_q'] = grad.norm().item()
 
-                # --- Belief covariance (via Cholesky factor) ---
+                # L_q (Cholesky of Σ_q)
                 if agent._L_q.grad is not None:
                     grad = agent._L_q.grad.clamp(-10.0, 10.0)
                     agent._L_q.data -= self.lr_sigma_q * grad
                     info['grad_norms']['L_q'] = grad.norm().item()
 
-                # --- Prior mean: dμ_p = -η_p Σ_p ∇_μp S ---
+                # μ_p: dμ_p = -η_p Σ_p ∇S
                 if agent.mu_p.grad is not None:
                     grad = agent.mu_p.grad.clamp(-10.0, 10.0)
                     if self.use_natural_gradient:
@@ -127,17 +171,60 @@ class NaturalGradientDynamics(nn.Module):
                     agent.mu_p.data -= self.lr_mu_p * nat_grad
                     info['grad_norms']['mu_p'] = grad.norm().item()
 
-                # --- Prior covariance (via Cholesky factor) ---
+                # L_p (Cholesky of Σ_p)
                 if agent._L_p.grad is not None:
                     grad = agent._L_p.grad.clamp(-10.0, 10.0)
                     agent._L_p.data -= self.lr_sigma_p * grad
                     info['grad_norms']['L_p'] = grad.norm().item()
 
-                # --- Gauge frame: dΩ = -η_Ω ∇_Ω S ---
+                # Ω: dΩ = -η_Ω ∇S
                 if agent.omega.grad is not None:
                     grad = agent.omega.grad.clamp(-10.0, 10.0)
                     agent.omega.data -= self.lr_omega * grad
                     info['grad_norms']['omega'] = grad.norm().item()
+
+                # ── SLOW: Model fiber (evolution, ×ε) ──
+
+                if ε > 0:
+                    # μ_s: dμ_s = -ε·η_s Σ_s ∇S
+                    if agent.mu_s.grad is not None:
+                        grad = agent.mu_s.grad.clamp(-10.0, 10.0)
+                        if self.use_natural_gradient:
+                            sigma_s = agent.sigma_s.detach()
+                            nat_grad = (sigma_s @ grad.unsqueeze(-1)).squeeze(-1)
+                        else:
+                            nat_grad = grad
+                        agent.mu_s.data -= ε * self.lr_mu_s * nat_grad
+                        info['grad_norms']['mu_s'] = grad.norm().item()
+
+                    # L_s (Cholesky of Σ_s)
+                    if agent._L_s.grad is not None:
+                        grad = agent._L_s.grad.clamp(-10.0, 10.0)
+                        agent._L_s.data -= ε * self.lr_sigma_s * grad
+                        info['grad_norms']['L_s'] = grad.norm().item()
+
+                    # μ_r: dμ_r = -ε·η_r Σ_r ∇S
+                    if agent.mu_r.grad is not None:
+                        grad = agent.mu_r.grad.clamp(-10.0, 10.0)
+                        if self.use_natural_gradient:
+                            sigma_r = agent.sigma_r.detach()
+                            nat_grad = (sigma_r @ grad.unsqueeze(-1)).squeeze(-1)
+                        else:
+                            nat_grad = grad
+                        agent.mu_r.data -= ε * self.lr_mu_r * nat_grad
+                        info['grad_norms']['mu_r'] = grad.norm().item()
+
+                    # L_r (Cholesky of Σ_r)
+                    if agent._L_r.grad is not None:
+                        grad = agent._L_r.grad.clamp(-10.0, 10.0)
+                        agent._L_r.data -= ε * self.lr_sigma_r * grad
+                        info['grad_norms']['L_r'] = grad.norm().item()
+
+                    # Ω̃: dΩ̃ = -ε·η_Ω̃ ∇S
+                    if agent.omega_model.grad is not None:
+                        grad = agent.omega_model.grad.clamp(-10.0, 10.0)
+                        agent.omega_model.data -= ε * self.lr_omega_model * grad
+                        info['grad_norms']['omega_model'] = grad.norm().item()
 
         # Zero gradients
         self.system.zero_grad()

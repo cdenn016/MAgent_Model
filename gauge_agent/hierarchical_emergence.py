@@ -2,31 +2,37 @@
 Hierarchical Emergence via Soft Condensation
 ==============================================
 
-Agents don't form hard clusters — they have SOFT membership in multiple
-meta-agents simultaneously, like a person belonging to a family, a company,
-a city, and a nation all at once.
+Two DISTINCT kinds of alignment:
 
-The key objects:
+  MODEL alignment (s_i ↔ s_j) → defines SPECIES
+    Agents sharing a generative model: same ontology, same way of
+    parsing reality. Humans share models with humans, not algae.
+    Evolves SLOWLY (evolutionary timescale, ε << 1 in dynamics).
 
-  W_{iα}(c) ∈ [0,1]  — agent i's membership in meta-agent α
-    Derived from model alignment: w_{iα} = σ(-KL(s_i || Ω̃_{iα}[s_α]) / τ)
-    NOT normalized: agent can be fully in multiple groups
+  BELIEF alignment (q_i ↔ q_j) → defines META-AGENTS (coalitions)
+    Agents agreeing on what's happening RIGHT NOW. A team, a flock,
+    a synchronized neural ensemble. Changes FAST (perceptual timescale).
 
-  Precision pooling (how meta-agents form):
-    Λ_q^α = Σ_i w_{iα} Ω_{αi} Λ_q^i Ω_{αi}^T
-    μ_q^α = (Λ_q^α)⁻¹ Σ_i w_{iα} Ω_{αi} Λ_q^i μ_q^i
+The SELECTION RULE: species GATES meta-agent formation.
+You can only coordinate with agents that share your model.
 
-  Condensation order parameter:
-    Ψ_α = mean variance of Ω̃_{αi}[s_i] within cluster α
-    Small Ψ → condensed (agents agree on model)
+    W_{iα} = S_{iσ(α)} · C_{iα}
 
-  Cross-scale VFE (differentiable):
-    S_cross = Σ_{i,α} w_{iα} KL(p_i || Ω_{iα}[q_α])      (belief top-down)
-            + Σ_{i,α} w_{iα} KL(r_i || Ω̃_{iα}[s_α])      (model top-down)
+    S_{iσ} = species gate from model alignment (slow, structural)
+    C_{iα} = coalition membership from belief alignment (fast, dynamic)
 
-This is a gauge-theoretic BCS: when τ drops below τ_c, agents condense into
-meta-agents with emergent properties. The soft membership matrix W is the
-order parameter of the phase transition.
+This is the full hierarchy:
+
+  Species (model fiber, slow):
+    genome → cell type → organism type → civilization
+    Defines the SPACE of possible meta-agents
+
+  Meta-agents (belief fiber, fast):
+    cell coordination → tissue → behavior → institutions
+    Dynamic coalitions WITHIN species
+
+Like Cooper pairs: condensation requires matching quantum numbers
+(species) before pairing (meta-agent formation) can occur.
 
 Reference: Dennis (2026), Sections 4.2-4.6
 """
@@ -44,81 +50,230 @@ from gauge_agent.statistical_manifold import gaussian_kl
 #  Soft Membership: the condensation order parameter
 # ─────────────────────────────────────────────────────────────
 
-class SoftMembership(nn.Module):
-    """Computes differentiable soft membership W_{iα} from model alignment.
-
-    Each agent i has membership w_{iα} ∈ [0,1] in meta-agent α,
-    derived from how well their models align after gauge transport:
-
-        w_{iα} = σ(-KL(s_i || Ω̃_{iα}[s_α]) / τ)
-
-    Key properties:
-      - w_{iα} is NOT normalized across α: you can be in multiple groups
-      - w_{iα} is differentiable: the hierarchy is end-to-end trainable
-      - As τ → 0: soft membership sharpens to hard clustering
-      - As τ → ∞: all memberships → 0.5 (uniform)
-
-    This is the BCS order parameter for agent condensation.
+def _pairwise_kl_cross(system_a: MultiAgentSystem,
+                       system_b: MultiAgentSystem,
+                       fiber: str = 'model') -> Tensor:
+    """KL divergences between two systems on the specified fiber.
 
     Args:
-        tau: temperature controlling membership sharpness
+        system_a: N-agent system (rows)
+        system_b: M-agent system (columns)
+        fiber: 'model' (s_i with Ω̃) or 'belief' (q_i with Ω)
+    Returns:
+        (N, M) matrix of KL divergences
+    """
+    N = system_a.N_agents
+    M = system_b.N_agents
+    K = system_a.K
+
+    if fiber == 'model':
+        mu_a = system_a.get_all_mu_s()
+        sigma_a = system_a.get_all_sigma_s()
+        omega_a = system_a.get_all_omega_model()
+        mu_b = system_b.get_all_mu_s()
+        sigma_b = system_b.get_all_sigma_s()
+        omega_b = system_b.get_all_omega_model()
+    else:
+        mu_a = system_a.get_all_mu_q()
+        sigma_a = system_a.get_all_sigma_q()
+        omega_a = system_a.get_all_omega()
+        mu_b = system_b.get_all_mu_q()
+        sigma_b = system_b.get_all_sigma_q()
+        omega_b = system_b.get_all_omega()
+
+    omega_b_inv = torch.linalg.inv(omega_b)
+    transport = omega_a.unsqueeze(1) @ omega_b_inv.unsqueeze(0)  # (N, M, K, K)
+
+    mu_b_t = (transport @ mu_b.unsqueeze(0).unsqueeze(-1)).squeeze(-1)
+    sigma_b_exp = sigma_b.unsqueeze(0).expand(N, -1, K, K)
+    sigma_b_t = transport @ sigma_b_exp @ transport.transpose(-2, -1)
+
+    mu_a_exp = mu_a.unsqueeze(1).expand(-1, M, K)
+    sigma_a_exp = sigma_a.unsqueeze(1).expand(-1, M, K, K)
+
+    return gaussian_kl(mu_a_exp, sigma_a_exp, mu_b_t, sigma_b_t)
+
+
+# ─────────────────────────────────────────────────────────────
+#  Species: structural grouping from model alignment (slow)
+# ─────────────────────────────────────────────────────────────
+
+class SpeciesDetector(nn.Module):
+    """Detects species structure from model alignment.
+
+    Species = agents sharing a generative model (s_i).
+    This is STRUCTURAL and SLOW — it defines what kind of thing
+    you are, not what you're currently thinking.
+
+    The species gate S_{iσ} ∈ [0,1] measures how well agent i's
+    model aligns with species σ's canonical model:
+
+        S_{iσ} = σ(-KL(s_i || Ω̃_{iσ}[s_σ]) / τ_species)
+
+    τ_species should be LARGE (loose grouping — you don't need
+    exact model match to be the same species, just approximate).
+
+    This gates meta-agent formation: you can only join a coalition
+    with agents of your species.
+
+    Args:
+        tau_species: temperature for species detection (larger = looser)
     """
 
-    def __init__(self, tau: float = 1.0):
+    def __init__(self, tau_species: float = 5.0):
+        super().__init__()
+        self.tau_species = tau_species
+
+    def species_gate(self, children: MultiAgentSystem,
+                     parents: MultiAgentSystem) -> Tensor:
+        """Compute species gate S_{iα} from model alignment.
+
+        Args:
+            children: N-agent system
+            parents: M-agent system (meta-agents / species representatives)
+        Returns:
+            (N, M) species gate matrix, entries in [0,1]
+        """
+        kl_model = _pairwise_kl_cross(children, parents, fiber='model')
+        return torch.sigmoid(-kl_model / self.tau_species)
+
+
+class CoalitionDetector(nn.Module):
+    """Detects dynamic coalitions from belief alignment.
+
+    Coalition = agents agreeing on what's happening NOW.
+    This is DYNAMIC and FAST — it changes as beliefs update.
+
+    The coalition membership C_{iα} ∈ [0,1]:
+
+        C_{iα} = σ(-KL(q_i || Ω_{iα}[q_α]) / τ_belief)
+
+    τ_belief should be SMALL (tight grouping — coalition members
+    need close agreement on current state).
+
+    Args:
+        tau_belief: temperature for coalition detection (smaller = tighter)
+    """
+
+    def __init__(self, tau_belief: float = 1.0):
+        super().__init__()
+        self.tau_belief = tau_belief
+
+    def coalition_membership(self, children: MultiAgentSystem,
+                              parents: MultiAgentSystem) -> Tensor:
+        """Compute coalition membership C_{iα} from belief alignment.
+
+        Args:
+            children: N-agent system
+            parents: M-agent system (meta-agents)
+        Returns:
+            (N, M) coalition membership matrix, entries in [0,1]
+        """
+        kl_belief = _pairwise_kl_cross(children, parents, fiber='belief')
+        return torch.sigmoid(-kl_belief / self.tau_belief)
+
+
+class GatedMembership(nn.Module):
+    """Computes effective membership W = S · C (species gates coalition).
+
+    The selection rule: you can only join a coalition (meta-agent)
+    if you're the right species. This is like:
+      - Cooper pairs: matching quantum numbers required for pairing
+      - Antibodies: matching shape required for binding
+      - Language: shared grammar required for communication
+
+    W_{iα} = S_{iα} · C_{iα}
+
+    S_{iα} = species gate (model alignment, slow, τ_species large)
+    C_{iα} = coalition membership (belief alignment, fast, τ_belief small)
+
+    A human (species=human) can join a human team (coalition) but
+    not an algae collective, even if they happen to have similar
+    beliefs about temperature.
+
+    Args:
+        tau_species: species detection temperature (default 5.0, loose)
+        tau_belief: coalition detection temperature (default 1.0, tight)
+    """
+
+    def __init__(self, tau_species: float = 5.0, tau_belief: float = 1.0):
+        super().__init__()
+        self.species = SpeciesDetector(tau_species)
+        self.coalition = CoalitionDetector(tau_belief)
+
+    def compute(self, children: MultiAgentSystem,
+                parents: MultiAgentSystem) -> Dict[str, Tensor]:
+        """Compute gated membership W = S · C.
+
+        Returns:
+            Dict with 'W' (effective), 'S' (species gate), 'C' (coalition)
+        """
+        S = self.species.species_gate(children, parents)
+        C = self.coalition.coalition_membership(children, parents)
+        W = S * C
+        return {'W': W, 'S': S, 'C': C}
+
+
+class SoftMembership(nn.Module):
+    """Computes differentiable soft membership W_{iα}.
+
+    Two modes:
+
+    1. GATED (default): W = S · C
+       Species gate (model alignment) × Coalition (belief alignment).
+       Use this for systems with species structure.
+
+    2. UNGATED: W = σ(-KL(s_i || Ω̃_{iα}[s_α]) / τ)
+       Pure model alignment. Use for simple systems.
+
+    Args:
+        tau: temperature for ungated mode
+        tau_species: species temperature (gated mode)
+        tau_belief: coalition temperature (gated mode)
+        gated: if True, use W = S · C (default True)
+    """
+
+    def __init__(self, tau: float = 1.0,
+                 tau_species: float = 5.0,
+                 tau_belief: float = 1.0,
+                 gated: bool = True):
         super().__init__()
         self.tau = tau
+        self.gated = gated
+        if gated:
+            self.gated_membership = GatedMembership(tau_species, tau_belief)
 
     def compute(self, children: MultiAgentSystem,
                 parents: MultiAgentSystem) -> Tensor:
         """Compute soft membership matrix W_{iα}.
 
-        Uses model fiber alignment: how well does child i's model s_i
-        align with parent α's model s_α after transport through Ω̃?
-
         Args:
             children: N-agent system at scale ℓ
-            parents: M-agent system at scale ℓ+1 (meta-agents)
+            parents: M-agent system at scale ℓ+1
         Returns:
             (N, M) soft membership matrix W, entries in [0,1]
         """
-        N = children.N_agents
-        M = parents.N_agents
-        K = children.K
-        device = children.agents[0].mu_s.device
+        if self.gated:
+            result = self.gated_membership.compute(children, parents)
+            return result['W']
+        else:
+            # Ungated: pure model alignment
+            kl = _pairwise_kl_cross(children, parents, fiber='model')
+            return torch.sigmoid(-kl / self.tau)
 
-        # Get model beliefs and frames
-        mu_s_child = children.get_all_mu_s()        # (N, K)
-        sigma_s_child = children.get_all_sigma_s()   # (N, K, K)
-        omega_child = children.get_all_omega_model()  # (N, K, K)
+    def compute_detailed(self, children: MultiAgentSystem,
+                          parents: MultiAgentSystem) -> Dict[str, Tensor]:
+        """Compute membership with species/coalition breakdown.
 
-        mu_s_parent = parents.get_all_mu_s()          # (M, K)
-        sigma_s_parent = parents.get_all_sigma_s()     # (M, K, K)
-        omega_parent = parents.get_all_omega_model()   # (M, K, K)
-
-        # Transport parent models into each child's frame
-        # Ω̃_{iα} = Ω̃_i Ω̃_α⁻¹
-        omega_parent_inv = torch.linalg.inv(omega_parent)  # (M, K, K)
-
-        # (N, 1, K, K) @ (1, M, K, K) → (N, M, K, K)
-        transport = omega_child.unsqueeze(1) @ omega_parent_inv.unsqueeze(0)
-
-        # Transport parent means: μ' = Ω̃_{iα} μ_s^α
-        mu_parent_t = (transport @ mu_s_parent.unsqueeze(0).unsqueeze(-1)).squeeze(-1)
-        # Transport parent covariances: Σ' = Ω̃_{iα} Σ_s^α Ω̃_{iα}^T
-        sigma_parent_exp = sigma_s_parent.unsqueeze(0).expand(N, -1, K, K)
-        sigma_parent_t = transport @ sigma_parent_exp @ transport.transpose(-2, -1)
-
-        # Expand child distributions for broadcasting
-        mu_child_exp = mu_s_child.unsqueeze(1).expand(-1, M, K)
-        sigma_child_exp = sigma_s_child.unsqueeze(1).expand(-1, M, K, K)
-
-        # KL(s_i || Ω̃_{iα}[s_α]) for all (i, α) pairs
-        kl = gaussian_kl(mu_child_exp, sigma_child_exp,
-                         mu_parent_t, sigma_parent_t)  # (N, M)
-
-        # Soft membership via sigmoid
-        W = torch.sigmoid(-kl / self.tau)  # (N, M)
-        return W
+        Returns:
+            Dict with 'W', 'S' (species), 'C' (coalition)
+        """
+        if self.gated:
+            return self.gated_membership.compute(children, parents)
+        else:
+            kl = _pairwise_kl_cross(children, parents, fiber='model')
+            W = torch.sigmoid(-kl / self.tau)
+            return {'W': W, 'S': W, 'C': torch.ones_like(W)}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -401,44 +556,48 @@ class CrossScaleVFE(nn.Module):
 # ─────────────────────────────────────────────────────────────
 
 class HierarchicalEmergence(nn.Module):
-    """Multi-scale soft hierarchy with emergent meta-agents.
+    """Multi-scale soft hierarchy with species-gated meta-agents.
 
-    Unlike the hard-clustering OuroborosTower, this system:
-      - Uses SOFT membership (agents in multiple meta-agents)
-      - Is FULLY DIFFERENTIABLE (end-to-end trainable)
-      - Has a PHASE TRANSITION (condensation at critical τ)
-      - Supports OVERLAPPING membership (family + company + nation)
+    Two orthogonal structures:
 
-    Architecture at each scale ℓ:
-      - MultiAgentSystem with N_ℓ agents
-      - Soft membership W^ℓ ∈ [0,1]^{N_ℓ × N_{ℓ+1}}
-      - Meta-agents at ℓ+1 get precision-pooled parameters from ℓ
+    SPECIES (model fiber, slow):
+      Agents sharing generative models form species groups.
+      S_{iσ} = σ(-KL(s_i || Ω̃_{iσ}[s_σ]) / τ_species)
+      Changes slowly (ε << 1 in dynamics). Defines compatibility.
 
-    The total VFE over the hierarchy:
-      S_total = Σ_ℓ S_ℓ[system_ℓ] + Σ_ℓ λ_cross · S_cross(ℓ, ℓ+1, W^ℓ)
+    META-AGENTS (belief fiber, fast):
+      Agents agreeing on current state form coalitions.
+      C_{iα} = σ(-KL(q_i || Ω_{iα}[q_α]) / τ_belief)
+      Changes fast. Defines coordination.
 
-    where S_ℓ is the within-scale VFE (Eq. 24) and S_cross is the
-    cross-scale coupling via soft membership.
+    SELECTION RULE:
+      W_{iα} = S_{iα} · C_{iα}
+      Can only join coalition α if you're the right species.
 
     Args:
         base_system: scale-0 MultiAgentSystem
-        n_meta_per_scale: how many meta-agents at each scale
-                          (list, or single int for uniform reduction)
-        tau: condensation temperature
+        n_meta_per_scale: meta-agents at each scale (default: halving)
+        tau_species: species detection temperature (larger = looser)
+        tau_belief: coalition detection temperature (smaller = tighter)
+        gated: if True, W = S · C. If False, W = model alignment only.
         lambda_cross: weight for cross-scale coupling
-        lambda_belief_topdown: weight for belief top-down in cross-scale VFE
-        lambda_model_topdown: weight for model top-down in cross-scale VFE
+        lambda_belief_topdown: weight for belief top-down
+        lambda_model_topdown: weight for model top-down
     """
 
     def __init__(self, base_system: MultiAgentSystem,
                  n_meta_per_scale: Optional[List[int]] = None,
-                 tau: float = 1.0,
+                 tau_species: float = 5.0,
+                 tau_belief: float = 1.0,
+                 gated: bool = True,
                  lambda_cross: float = 1.0,
                  lambda_belief_topdown: float = 1.0,
                  lambda_model_topdown: float = 1.0):
         super().__init__()
 
-        self.tau = tau
+        self.tau_species = tau_species
+        self.tau_belief = tau_belief
+        self.gated = gated
         self.lambda_cross = lambda_cross
 
         N = base_system.N_agents
@@ -470,8 +629,13 @@ class HierarchicalEmergence(nn.Module):
 
         self.n_levels = len(self.scales)
 
-        # Soft membership computer
-        self.membership = SoftMembership(tau=tau)
+        # Soft membership: species-gated by default
+        self.membership = SoftMembership(
+            tau=tau_belief,
+            tau_species=tau_species,
+            tau_belief=tau_belief,
+            gated=gated,
+        )
 
         # Cross-scale VFE
         self.cross_vfe = CrossScaleVFE(
@@ -483,7 +647,7 @@ class HierarchicalEmergence(nn.Module):
         self.condensation = CondensationDiagnostics()
 
     def compute_all_memberships(self) -> List[Tensor]:
-        """Compute soft membership matrices at all scales.
+        """Compute effective membership matrices W at all scales.
 
         Returns:
             List of (N_ℓ, N_{ℓ+1}) membership matrices
@@ -493,6 +657,20 @@ class HierarchicalEmergence(nn.Module):
             W = self.membership.compute(self.scales[ell], self.scales[ell + 1])
             memberships.append(W)
         return memberships
+
+    def compute_all_memberships_detailed(self) -> List[Dict[str, Tensor]]:
+        """Compute memberships with species/coalition breakdown.
+
+        Returns:
+            List of dicts with 'W', 'S' (species), 'C' (coalition)
+        """
+        details = []
+        for ell in range(self.n_levels - 1):
+            d = self.membership.compute_detailed(
+                self.scales[ell], self.scales[ell + 1]
+            )
+            details.append(d)
+        return details
 
     def update_meta_agents(self, memberships: Optional[List[Tensor]] = None):
         """Update meta-agent parameters via precision pooling.
@@ -603,43 +781,42 @@ class HierarchicalEmergence(nn.Module):
     def diagnostics(self) -> Dict:
         """Comprehensive hierarchy diagnostics.
 
-        Returns dict with:
-          - scale_agents: [N_0, N_1, ..., N_L]
-          - condensation_fractions: [f_0→1, f_1→2, ...]
-          - order_parameters: [[Ψ_α for α in scale ℓ+1] for ℓ]
-          - membership_stats: [{mean, max, min, active} for each scale]
+        Returns dict with species/coalition breakdown at each scale.
         """
         info = {
             'n_levels': self.n_levels,
             'scale_agents': [s.N_agents for s in self.scales],
-            'tau': self.tau,
+            'tau_species': self.tau_species,
+            'tau_belief': self.tau_belief,
+            'gated': self.gated,
         }
 
-        memberships = self.compute_all_memberships()
+        details = self.compute_all_memberships_detailed()
         info['condensation_fractions'] = []
         info['order_parameters'] = []
         info['membership_stats'] = []
 
         for ell in range(self.n_levels - 1):
-            W = memberships[ell]
+            d = details[ell]
+            W = d['W']
+            S = d['S']
+            C = d['C']
 
-            # Condensation
             f = self.condensation.condensation_fraction(
                 self.scales[ell], self.scales[ell + 1], W
             )
             info['condensation_fractions'].append(f)
 
-            # Order parameter per meta-agent
             psi = self.condensation.order_parameter(
                 self.scales[ell], self.scales[ell + 1], W
             )
             info['order_parameters'].append(psi.tolist())
 
-            # Membership statistics
             info['membership_stats'].append({
-                'mean': W.mean().item(),
-                'max': W.max().item(),
-                'min': W.min().item(),
+                'W_mean': W.mean().item(),
+                'S_mean': S.mean().item(),
+                'C_mean': C.mean().item(),
+                'W_max': W.max().item(),
                 'active_meta': (W.sum(dim=0) > 0.5).sum().item(),
             })
 
@@ -652,5 +829,7 @@ class HierarchicalEmergence(nn.Module):
         fracs = diag['condensation_fractions']
         parts = [f"ℓ{i}:{n}" for i, n in enumerate(agents)]
         frac_str = [f"{f:.2f}" for f in fracs]
+        mode = "gated" if self.gated else "ungated"
         return (f"Hierarchy [{' → '.join(parts)}] "
-                f"condensation=[{', '.join(frac_str)}] τ={self.tau:.2f}")
+                f"condensation=[{', '.join(frac_str)}] "
+                f"τ_s={self.tau_species:.1f} τ_b={self.tau_belief:.1f} ({mode})")
