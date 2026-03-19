@@ -6,11 +6,28 @@ The manuscript's VFE (Eq. 24, lines 664-675, and Eq. 650):
 
   CORE (5 terms from the boxed equation):
 
-    Σ_i ∫_C χ_i KL(q_i || p_i) √|g| dc                          [T1: belief self-consistency]
-  + Σ_i ∫_C χ_i KL(s_i || r_i) √|g| dc                          [T2: model self-consistency]
+    Σ_i ∫_C χ_i α_i(x) KL(q_i || p_i) √|g| dc                  [T1: belief self-consistency]
+  + Σ_i ∫_C χ_i α̃_i(x) KL(s_i || r_i) √|g| dc                  [T2: model self-consistency]
   + Σ_ij ∫_C χ_ij β_ij KL(q_i || Ω_ij[q_j]) √|g| dc            [T3: belief alignment]
   + Σ_ij ∫_C χ_ij γ_ij KL(s_i || Ω̃_ij[s_j]) √|g| dc            [T4: model alignment]
   - Σ_i ∫_C χ_i E_{q_i}[log p(o|q_i)] √|g| dc                   [T5: observation]
+  + Σ_i R(α_i) + R(α̃_i)                                          [R_α: precision regularizer]
+
+  α_i(x) = c₀ / (b₀ + KL(q_i(x) || p_i(x)))    [state-dependent precision]
+  α̃_i(x) = c̃₀ / (b̃₀ + KL(s_i(x) || r_i(x)))   [model precision]
+  R(α) = b₀·α - c₀·log(α)                        [log barrier regularizer]
+
+  The log barrier form (Section 2.11.2, Eq. 28-30):
+    - Prevents α → 0 (log barrier enforces α > 0)
+    - Prevents α → ∞ (linear penalty)
+    - Optimal α* = c₀/(b₀ + KL) is closed-form
+    - Context-dependent: agents near prior trust it more,
+      agents far from prior loosen it
+
+  b₀, c₀ are per-agent hyperparameters on the model fiber:
+    - b₀ controls sensitivity (large b₀ → nearly constant α)
+    - c₀/b₀ sets maximum precision (when KL ≈ 0)
+    - Can evolve slowly with ε (part of agent's genotype)
 
   OPTIONAL EXTENSIONS (mentioned in line 708 and Section 4.4):
 
@@ -33,7 +50,7 @@ Note: s_i ≠ p_i. The agent has FOUR distributions:
   s_i (what I think my model IS), r_i (what I expected my model to be).
   T4 aligns s_i across agents — this is ontology sharing.
 
-Reference: Dennis (2026), Sections 2.10-2.11 (Eqs. 24, 650)
+Reference: Dennis (2026), Sections 2.10-2.11 (Eqs. 24, 650, 28-30)
 """
 
 import torch
@@ -46,17 +63,126 @@ from gauge_agent.statistical_manifold import gaussian_kl
 from gauge_agent.agents import Agent, MultiAgentSystem
 
 
+class AdaptivePrecision(nn.Module):
+    """State-dependent precision via log barrier (Section 2.11.2).
+
+    The self-coupling weight α_i is NOT a fixed constant — it adapts
+    to context via the log barrier regularizer:
+
+        R(α) = b₀·α - c₀·log(α)
+
+    The optimal α at each point x on the base manifold:
+
+        α_i*(x) = c₀ / (b₀ + KL(q_i(x) || p_i(x)))
+
+    Physical meaning:
+        - Near prior (KL ≈ 0): α ≈ c₀/b₀ (high, trusts prior)
+        - Far from prior (KL large): α → 0 (low, prior loosened)
+        - This IS precision-weighting in predictive coding
+
+    The log barrier prevents degenerate solutions:
+        - α → 0: log barrier → -∞ (forbidden)
+        - α → ∞: linear penalty dominates (bounded)
+
+    Both b₀ and c₀ are per-agent. They live on the model fiber
+    (part of what kind of thing you are) and evolve slowly (×ε).
+
+    α_i(x) is a FIELD over the base manifold, like β_ij(x).
+    It varies spatially because KL(q_i || p_i) varies spatially.
+
+    Args:
+        b0: barrier sensitivity (large → nearly constant α)
+        c0: barrier strength (c₀/b₀ = max precision when KL=0)
+        use_barrier_regularizer: if True, include R(α) in the VFE
+    """
+
+    def __init__(self, b0: float = 1.0, c0: float = 1.0,
+                 use_barrier_regularizer: bool = True):
+        super().__init__()
+        self.b0 = b0
+        self.c0 = c0
+        self.use_barrier_regularizer = use_barrier_regularizer
+
+    def alpha(self, kl: Tensor) -> Tensor:
+        """Compute optimal state-dependent precision α*(x).
+
+        α*(x) = c₀ / (b₀ + KL(x))
+
+        Args:
+            kl: (...) KL divergence field (non-negative)
+        Returns:
+            (...) precision field α(x) > 0
+        """
+        return self.c0 / (self.b0 + kl.clamp(min=0))
+
+    def regularizer(self, alpha: Tensor) -> Tensor:
+        """Log barrier regularizer R(α) = b₀·α - c₀·log(α).
+
+        Args:
+            alpha: (...) precision values (must be > 0)
+        Returns:
+            (...) regularizer values
+        """
+        return self.b0 * alpha - self.c0 * torch.log(alpha.clamp(min=1e-8))
+
+    def forward(self, kl: Tensor,
+                chi: Optional[Tensor] = None,
+                vol: Optional[Tensor] = None) -> Dict[str, Tensor]:
+        """Compute α-weighted self-consistency + barrier regularizer.
+
+        Returns:
+            Dict with:
+                'weighted_kl': Σ_i ∫ χ_i α_i(x) KL_i(x) √|g| dx
+                'regularizer': Σ_i ∫ R(α_i(x)) √|g| dx  (or 0)
+                'alpha': (N, *grid) precision field
+                'total': weighted_kl + regularizer
+        """
+        alpha = self.alpha(kl)  # (N, *grid)
+
+        weighted_kl = alpha * kl  # (N, *grid)
+        if chi is not None:
+            weighted_kl = weighted_kl * chi
+        if vol is not None:
+            weighted_kl = weighted_kl * vol
+        weighted_kl_sum = weighted_kl.sum()
+
+        reg_sum = torch.tensor(0.0, device=kl.device)
+        if self.use_barrier_regularizer:
+            reg = self.regularizer(alpha)
+            if chi is not None:
+                reg = reg * chi
+            if vol is not None:
+                reg = reg * vol
+            reg_sum = reg.sum()
+
+        return {
+            'weighted_kl': weighted_kl_sum,
+            'regularizer': reg_sum,
+            'alpha': alpha,
+            'total': weighted_kl_sum + reg_sum,
+        }
+
+
 class FullVFE(nn.Module):
     """The complete variational free energy functional from the manuscript.
 
     Implements ALL terms from Eq. 24 plus regularizers and hyperpriors,
     with proper volume-weighted integration on curved base manifolds.
 
-    This replaces the simpler FreeEnergyFunctional for production use.
+    Now with state-dependent precision α_i(x) via log barrier
+    (Section 2.11.2, Eqs. 28-30):
+
+        T1: Σ_i ∫ χ_i α_i(x) KL(q_i || p_i) √|g| dc
+        T2: Σ_i ∫ χ_i α̃_i(x) KL(s_i || r_i) √|g| dc
+
+        α_i(x) = c₀/(b₀ + KL(q_i(x) || p_i(x)))
+        α̃_i(x) = c̃₀/(b̃₀ + KL(s_i(x) || r_i(x)))
+
+    When adaptive_precision=False, falls back to constant α=1 (λ_self scaling).
 
     Args:
-        lambda_self: weight for T1 (belief self-consistency)
-        lambda_model_self: weight for T2 (model/prior self-consistency)
+        lambda_self: weight for T1 (used when adaptive_precision=False)
+        lambda_model_self: weight for T2 (used when adaptive_precision=False)
         lambda_belief: weight for T3 (belief alignment)
         lambda_model: weight for T4 (model alignment)
         lambda_obs: weight for T5 (observation likelihood)
@@ -65,6 +191,11 @@ class FullVFE(nn.Module):
         lambda_hyper: base weight for T6 (hyperpriors)
         tau_belief: softmax temperature for β_ij
         tau_model: softmax temperature for γ_ij
+        adaptive_precision: if True, use log barrier α_i(x)
+        b0_belief: b₀ for belief precision (sensitivity)
+        c0_belief: c₀ for belief precision (c₀/b₀ = max precision)
+        b0_model: b̃₀ for model precision
+        c0_model: c̃₀ for model precision
         hyperprior_decay: ρ for exponential weighting of ancestral priors
         hyperprior_depth: D, max ancestral depth
     """
@@ -80,6 +211,11 @@ class FullVFE(nn.Module):
                  lambda_hyper: float = 0.5,
                  tau_belief: float = 1.0,
                  tau_model: float = 1.0,
+                 adaptive_precision: bool = False,
+                 b0_belief: float = 1.0,
+                 c0_belief: float = 1.0,
+                 b0_model: float = 1.0,
+                 c0_model: float = 0.5,
                  hyperprior_decay: float = 0.5,
                  hyperprior_depth: int = 5):
         super().__init__()
@@ -95,6 +231,16 @@ class FullVFE(nn.Module):
         self.tau_model = tau_model
         self.hyperprior_decay = hyperprior_decay
         self.hyperprior_depth = hyperprior_depth
+
+        # Adaptive precision (Section 2.11.2)
+        self.adaptive_precision = adaptive_precision
+        if adaptive_precision:
+            self.belief_precision = AdaptivePrecision(
+                b0=b0_belief, c0=c0_belief
+            )
+            self.model_precision = AdaptivePrecision(
+                b0=b0_model, c0=c0_model
+            )
 
     # ─────────────────────────────────────────────────────────
     # Attention weights (softmax over KL divergence)
@@ -127,10 +273,19 @@ class FullVFE(nn.Module):
 
     def belief_self_consistency(self, system: MultiAgentSystem,
                                  chi: Optional[Tensor] = None,
-                                 vol: Optional[Tensor] = None) -> Tensor:
-        """T1: Σ_i ∫ χ_i KL(q_i || p_i) √|g| dc.
+                                 vol: Optional[Tensor] = None
+                                 ) -> Dict[str, Tensor]:
+        """T1: Σ_i ∫ χ_i α_i(x) KL(q_i || p_i) √|g| dc.
 
-        Occam penalty: beliefs should not deviate too far from priors.
+        With adaptive precision (Section 2.11.2):
+            α_i(x) = c₀/(b₀ + KL(q_i(x) || p_i(x)))
+
+        Near prior → high α (trusts prior).
+        Far from prior → low α (loosens prior, allows adaptation).
+
+        Returns:
+            Dict with 'value' (scalar), 'alpha' (field), 'regularizer'
+            OR just scalar (backward compat when adaptive_precision=False)
         """
         mu_q = system.get_all_mu_q()
         sigma_q = system.get_all_sigma_q()
@@ -139,11 +294,16 @@ class FullVFE(nn.Module):
 
         kl = gaussian_kl(mu_q, sigma_q, mu_p, sigma_p)  # (N, *grid)
 
-        if chi is not None:
-            kl = kl * chi
-        if vol is not None:
-            kl = kl * vol
-        return kl.sum()
+        if self.adaptive_precision:
+            result = self.belief_precision(kl, chi, vol)
+            return result
+        else:
+            if chi is not None:
+                kl = kl * chi
+            if vol is not None:
+                kl = kl * vol
+            return {'weighted_kl': kl.sum(), 'regularizer': torch.tensor(0.0, device=kl.device),
+                    'alpha': torch.ones_like(kl), 'total': kl.sum()}
 
     # ─────────────────────────────────────────────────────────
     # T2: Model self-consistency KL(s_i || r_i)
@@ -151,19 +311,18 @@ class FullVFE(nn.Module):
 
     def model_self_consistency(self, system: MultiAgentSystem,
                                 chi: Optional[Tensor] = None,
-                                vol: Optional[Tensor] = None) -> Tensor:
-        """T2: Σ_i ∫ χ_i KL(s_i || r_i) √|g| dc.
+                                vol: Optional[Tensor] = None
+                                ) -> Dict[str, Tensor]:
+        """T2: Σ_i ∫ χ_i α̃_i(x) KL(s_i || r_i) √|g| dc.
 
-        Model belief should not deviate too far from model prior.
-        s_i is the agent's current model of reality; r_i is what
-        it expected its model to be.
+        With adaptive precision:
+            α̃_i(x) = c̃₀/(b̃₀ + KL(s_i(x) || r_i(x)))
 
-        Args:
-            system: MultiAgentSystem
-            chi: (N, *grid) support
-            vol: (*grid) volume form
+        Model near its prior → high α̃ (trusts model prior).
+        Model far from prior → low α̃ (model drifting, allow exploration).
+
         Returns:
-            Scalar model self-consistency energy
+            Dict with 'value', 'alpha', 'regularizer'
         """
         mu_s = system.get_all_mu_s()
         sigma_s = system.get_all_sigma_s()
@@ -172,11 +331,16 @@ class FullVFE(nn.Module):
 
         kl = gaussian_kl(mu_s, sigma_s, mu_r, sigma_r)  # (N, *grid)
 
-        if chi is not None:
-            kl = kl * chi
-        if vol is not None:
-            kl = kl * vol
-        return kl.sum()
+        if self.adaptive_precision:
+            result = self.model_precision(kl, chi, vol)
+            return result
+        else:
+            if chi is not None:
+                kl = kl * chi
+            if vol is not None:
+                kl = kl * vol
+            return {'weighted_kl': kl.sum(), 'regularizer': torch.tensor(0.0, device=kl.device),
+                    'alpha': torch.ones_like(kl), 'total': kl.sum()}
 
     # ─────────────────────────────────────────────────────────
     # T3: Belief alignment KL(q_i || Ω_ij[q_j])
@@ -533,11 +697,17 @@ class FullVFE(nn.Module):
 
         # ── CORE TERMS (Eq. 24) ──
 
-        # T1: KL(q_i || p_i)
-        T1 = self.belief_self_consistency(system, chi_all, vol)
+        # T1: α_i(x) · KL(q_i || p_i)
+        T1_result = self.belief_self_consistency(system, chi_all, vol)
+        T1 = T1_result['weighted_kl']
+        alpha_belief = T1_result['alpha']
+        R_alpha = T1_result['regularizer']
 
-        # T2: KL(s_i || r_i)
-        T2 = self.model_self_consistency(system, chi_all, vol)
+        # T2: α̃_i(x) · KL(s_i || r_i)
+        T2_result = self.model_self_consistency(system, chi_all, vol)
+        T2 = T2_result['weighted_kl']
+        alpha_model = T2_result['alpha']
+        R_alpha_model = T2_result['regularizer']
 
         # T3: β_ij KL(q_i || Ω_ij[q_j])
         T3, beta, E_belief = self.belief_alignment(
@@ -555,8 +725,8 @@ class FullVFE(nn.Module):
             T5 = self.observation_term(system, observations, obs_precision,
                                         chi_all, vol)
 
-        total = (self.lambda_self * T1
-                 + self.lambda_model_self * T2
+        total = (self.lambda_self * T1 + R_alpha
+                 + self.lambda_model_self * T2 + R_alpha_model
                  + self.lambda_belief * T3
                  + self.lambda_model * T4
                  + self.lambda_obs * T5)
@@ -589,6 +759,11 @@ class FullVFE(nn.Module):
             'T3_belief_align': T3,
             'T4_model_align': T4,
             'T5_observation': T5,
+            # Adaptive precision (Section 2.11.2)
+            'alpha_belief': alpha_belief,
+            'alpha_model': alpha_model,
+            'R_alpha_belief': R_alpha,
+            'R_alpha_model': R_alpha_model,
             # Optional extensions
             'EXT_hyperprior': T6,
             'EXT_gauge_smooth': R1,
